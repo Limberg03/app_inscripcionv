@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Tracking Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+         * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .stat-card p {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .chart-container h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.3rem;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .controls h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #555;
+            min-width: 100px;
+        }
+
+        .control-group select,
+        .control-group input {
+            padding: 8px 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .control-group select:focus,
+        .control-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .requests-table {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .mode-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .mode-sync {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .mode-async {
+            background: #e8f5e8;
+            color: #388e3c;
+        }
+
+        .status-success {
+            color: #28a745;
+        }
+
+        .status-error {
+            color: #dc3545;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .performance-comparison {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .comparison-item {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .improvement-highlight {
+            background: #d4edda;
+            border: 2px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .control-group {
+                flex-direction: column;
+            }
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .page-info {
+            background: #f8f9fa;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        .real-time-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: pulse 2s infinite;
+            z-index: 100000;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    
+
+    <div class="container">
+        <div class="header">
+            <p>Monitoreo en tiempo real de peticiones síncronas y asíncronas</p>
+        </div>
+
+        <!-- Estadísticas Principales -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 id="total-requests">0</h3>
+                <p>Total Requests</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="sync-requests">0</h3>
+                <p>Requests Síncronos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="async-requests">0</h3>
+                <p>Requests Asíncronos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="avg-response-time">0</h3>
+                <p>Tiempo Promedio (ms)</p>
+            </div>
+            
+        </div>        
+
+     
+
+        <!-- Controles -->
+        <div class="controls">
+            <h3>🎛️ Controles y Filtros</h3>
+            
+            <div class="control-group">
+                <label>Modo:</label>
+                <select id="mode-filter">
+                    <option value="all">Todos</option>
+                    <option value="sync">Síncrono</option>
+                    <option value="async">Asíncrono</option>
+                </select>
+
+                <label>Método:</label>
+                <select id="method-filter">
+                    <option value="all">Todos</option>
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+
+                <label>Modelo:</label>
+                <select id="model-filter">
+                    <option value="all">Todos</option>
+                </select>
+
+                <label>Por página:</label>
+                <select id="limit-filter">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+
+            <!-- <div class="control-group">
+                <button class="btn btn-primary" onclick="loadRequests()">🔄 Actualizar</button>
+                <button class="btn btn-success" onclick="exportData('json')">📄 Exportar JSON</button>
+                <button class="btn btn-success" onclick="exportData('csv')">📊 Exportar CSV</button>
+                <button class="btn btn-secondary" onclick="clearHistory('all')">🗑️ Limpiar Historial</button>
+                <button class="btn btn-danger" onclick="resetCounters('all')">🔄 Reset Contadores</button>
+            </div> -->
+        </div>
+
+        <!-- Tabla de Requests -->
+        <div class="requests-table">
+            <h3> Historial de Requests</h3>
+            <div id="error-message" class="error-message" style="display: none;"></div>
+            <div id="loading" class="loading">Cargando datos...</div>
+            <table id="requests-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Modo</th>
+                        <th>Método</th>
+                        <th>URL</th>
+                        <th>Modelo</th>
+                        <th>Estado</th>
+                        <th>Tiempo (ms)</th>
+                        <th>Éxito</th>
+                    </tr>
+                </thead>
+                <tbody id="requests-body">
+                </tbody>
+            </table>
+
+            <div class="pagination" id="pagination" style="display: none;">
+                <button class="btn btn-secondary" id="prev-page" onclick="changePage(-1)">« Anterior</button>
+                <span class="page-info" id="page-info">-</span>
+                <button class="btn btn-secondary" id="next-page" onclick="changePage(1)">Siguiente »</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Variables globales
+    let currentPage = 1;
+    let totalPages = 1;
+    let methodChart, modelChart;
+    let autoRefresh;
+    let availableModels = [];
+
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeCharts();
+        loadStats();
+        loadRequests();
+        startAutoRefresh();
+        
+        // Configurar botones de paginación
+        setupPaginationButtons();
+    });
+
+    // Configurar botones de paginación
+    function setupPaginationButtons() {
+        const prevBtn = document.getElementById('prev-page');
+        const nextBtn = document.getElementById('next-page');
+        
+        if (prevBtn) {
+            prevBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (!this.disabled) {
+                    changePage(-1);
+                }
+            });
+        }
+        
+        if (nextBtn) {
+            nextBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (!this.disabled) {
+                    changePage(1);
+                }
+            });
+        }
+    }
+
+    // Mostrar mensaje de error
+    function showError(message) {
+        const errorDiv = document.getElementById('error-message');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
+
+    // ✅ INICIALIZAR GRÁFICAS - CORREGIDO
+    function initializeCharts() {
+        // Nota: Los canvas no existen en el HTML actual, esto causará error
+        console.warn('⚠️ Canvas elements not found - charts will not display');
+        // Si quieres las gráficas, descomenta y agrega los canvas al HTML
+        /*
+        const methodCtx = document.getElementById('methodChart');
+        const modelCtx = document.getElementById('modelChart');
+        
+        if (!methodCtx || !modelCtx) {
+            console.error('❌ Canvas elements not found');
+            showError('Error: No se pueden cargar las gráficas');
+            return;
+        }
+
+        methodChart = new Chart(methodCtx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+                datasets: [{
+                    data: [0, 0, 0, 0, 0],
+                    backgroundColor: [
+                        '#4CAF50',
+                        '#2196F3',
+                        '#FF9800',
+                        '#9C27B0',
+                        '#F44336'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        modelChart = new Chart(modelCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Requests',
+                    data: [],
+                    backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                    borderColor: 'rgba(102, 126, 234, 1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        */
+    }
+
+    // Cargar estadísticas
+    async function loadStats() {
+        try {
+            const response = await fetch('/tracking/stats');
+            const result = await response.json();
+            
+            console.log('[HTML] Stats response:', result);
+            
+            if (result.success && result.data) {
+                const data = result.data;
+                
+                // Actualizar estadísticas principales
+                document.getElementById('total-requests').textContent = data.summary?.totalRequests || 0;
+                document.getElementById('sync-requests').textContent = data.summary?.syncRequests || 0;
+                document.getElementById('async-requests').textContent = data.summary?.asyncRequests || 0;
+                document.getElementById('avg-response-time').textContent = Math.round(data.performance?.avgResponseTime || 0) + 'ms';
+
+                // Actualizar gráficas si existen
+                /*
+                if (methodChart && data.methodDistribution) {
+                    const methodTotals = Object.values(data.methodDistribution).map(dist => dist.total);
+                    methodChart.data.datasets[0].data = methodTotals;
+                    methodChart.update();
+                }
+
+                if (modelChart && data.modelDistribution) {
+                    const models = Object.keys(data.modelDistribution);
+                    const modelTotals = Object.values(data.modelDistribution).map(dist => dist.total);
+                    modelChart.data.labels = models;
+                    modelChart.data.datasets[0].data = modelTotals;
+                    modelChart.update();
+                }
+                */
+
+                // Actualizar filtro de modelos
+                if (data.modelDistribution) {
+                    const models = Object.keys(data.modelDistribution);
+                    updateModelFilter(models);
+                }
+
+                // Cargar comparación de rendimiento
+                loadPerformanceComparison();
+            } else {
+                console.error('Error en datos de estadísticas:', result);
+                showError('Error cargando estadísticas');
+            }
+        } catch (error) {
+            console.error('Error cargando estadísticas:', error);
+            showError('Error de conexión al cargar estadísticas');
+        }
+    }
+
+    // Cargar comparación de rendimiento
+    async function loadPerformanceComparison() {
+        try {
+            const response = await fetch('/tracking/performance');
+            const result = await response.json();
+            
+            console.log('[HTML] Performance response:', result);
+            
+            if (result.success && result.data) {
+                const data = result.data;
+                
+                // Actualizar solo si los elementos existen
+                const syncAvgEl = document.getElementById('sync-avg-time');
+                const syncCountEl = document.getElementById('sync-count');
+                const syncSuccessEl = document.getElementById('sync-success');
+                const asyncAvgEl = document.getElementById('async-avg-time');
+                const asyncCountEl = document.getElementById('async-count');
+                const asyncSuccessEl = document.getElementById('async-success');
+                const timeSavedEl = document.getElementById('time-saved');
+                const efficiencyEl = document.getElementById('efficiency');
+                
+                if (syncAvgEl) syncAvgEl.textContent = data.modeComparison?.sync?.avgResponseTime + 'ms' || '0ms';
+                if (syncCountEl) syncCountEl.textContent = data.modeComparison?.sync?.requests || 0;
+                if (syncSuccessEl) syncSuccessEl.textContent = data.modeComparison?.sync?.successRate + '%' || '0%';
+                if (asyncAvgEl) asyncAvgEl.textContent = data.modeComparison?.async?.avgResponseTime + 'ms' || '0ms';
+                if (asyncCountEl) asyncCountEl.textContent = data.modeComparison?.async?.requests || 0;
+                if (asyncSuccessEl) asyncSuccessEl.textContent = data.modeComparison?.async?.successRate + '%' || '0%';
+                if (timeSavedEl && efficiencyEl) {
+                    timeSavedEl.textContent = data.improvement?.timeSaved || '0ms';
+                    efficiencyEl.textContent = data.improvement?.efficiency || '0%';
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando comparación de rendimiento:', error);
+        }
+    }
+
+    // ✅ CARGAR REQUESTS - MEJORADO
+    async function loadRequests() {
+        try {
+            console.log(`📄 Cargando página ${currentPage}...`);
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('requests-table').style.display = 'none';
+            document.getElementById('pagination').style.display = 'none';
+            document.getElementById('error-message').style.display = 'none';
+
+            const mode = document.getElementById('mode-filter').value;
+            const method = document.getElementById('method-filter').value;
+            const model = document.getElementById('model-filter').value;
+            const limit = document.getElementById('limit-filter').value;
+
+            const params = new URLSearchParams({
+                mode: mode || 'all',
+                method: method || 'all',
+                model: model || 'all',
+                page: currentPage,
+                limit: limit || 20,
+                sortBy: 'timestamp',
+                sortOrder: 'desc'
+            });
+
+            console.log('🔍 Request params:', params.toString());
+
+            const response = await fetch(`/tracking/requests?${params}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('📊 Requests response:', result);
+            
+            if (result.success && result.data) {
+                displayRequests(result.data.requests || result.data);
+                updatePagination(result.pagination || {
+                    currentPage: 1,
+                    totalPages: 1,
+                    totalItems: 0,
+                    hasPreviousPage: false,
+                    hasNextPage: false
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('requests-table').style.display = 'table';
+                document.getElementById('pagination').style.display = 'flex';
+            } else {
+                throw new Error(result.message || 'Error en la respuesta del servidor');
+            }
+        } catch (error) {
+            console.error('❌ Error cargando requests:', error);
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('loading').textContent = 'Error cargando datos';
+            showError('Error de conexión: ' + error.message);
+        }
+    }
+
+    // ✅ MOSTRAR REQUESTS - MEJORADO
+    function displayRequests(requests) {
+        const tbody = document.getElementById('requests-body');
+        tbody.innerHTML = '';
+
+        if (!requests || requests.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #666;">No hay requests que mostrar</td></tr>';
+            return;
+        }
+
+        requests.forEach(request => {
+            const row = document.createElement('tr');
+            const timestamp = new Date(request.timestamp || Date.now()).toLocaleString('es-ES');
+            const modeClass = request.mode ? `mode-${request.mode.toLowerCase()}` : 'mode-sync';
+            const statusClass = request.success ? 'status-success' : 'status-error';
+            
+            row.innerHTML = `
+                <td>${timestamp}</td>
+                <td><span class="mode-badge ${modeClass}">${request.mode || 'N/A'}</span></td>
+                <td><strong>${request.method || 'N/A'}</strong></td>
+                <td><code style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; display: block; white-space: nowrap;">${request.url || 'N/A'}</code></td>
+                <td>${request.model || 'N/A'}</td>
+                <td>${request.statusCode || 'N/A'}</td>
+                <td>${request.responseTime || 0}ms</td>
+                <td><span class="${statusClass}">${request.success ? '✅' : '❌'}</span></td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // ✅ ACTUALIZAR PAGINACIÓN - CORREGIDO
+    function updatePagination(pagination) {
+        console.log('📄 Actualizando paginación:', pagination);
+        
+        currentPage = pagination.currentPage || 1;
+        totalPages = pagination.totalPages || 1;
+        
+        const pageInfo = document.getElementById('page-info');
+        if (pageInfo) {
+            pageInfo.textContent = 
+                `Página ${currentPage} de ${totalPages} (${pagination.totalItems || 0} elementos)`;
+        }
+        
+        const prevBtn = document.getElementById('prev-page');
+        const nextBtn = document.getElementById('next-page');
+        
+        if (prevBtn) {
+            const hasPrevious = pagination.hasPreviousPage !== false && currentPage > 1;
+            prevBtn.disabled = !hasPrevious;
+            prevBtn.style.opacity = hasPrevious ? '1' : '0.5';
+            prevBtn.style.cursor = hasPrevious ? 'pointer' : 'not-allowed';
+        }
+        
+        if (nextBtn) {
+            const hasNext = pagination.hasNextPage !== false && currentPage < totalPages;
+            nextBtn.disabled = !hasNext;
+            nextBtn.style.opacity = hasNext ? '1' : '0.5';
+            nextBtn.style.cursor = hasNext ? 'pointer' : 'not-allowed';
+        }
+        
+        console.log(`✅ Paginación actualizada - Página ${currentPage}/${totalPages}`);
+    }
+
+    // ✅ CAMBIAR PÁGINA - CORREGIDO
+    function changePage(direction) {
+        console.log(`🔄 Cambiando página: ${currentPage} + ${direction}`);
+        
+        const newPage = currentPage + direction;
+        
+        if (newPage >= 1 && newPage <= totalPages) {
+            console.log(`✅ Navegando a página ${newPage}`);
+            currentPage = newPage;
+            loadRequests();
+        } else {
+            console.log(`⏹️ Página ${newPage} fuera de rango (1-${totalPages})`);
+        }
+    }
+
+    // Actualizar filtro de modelos
+    function updateModelFilter(models) {
+        availableModels = models || [];
+        const select = document.getElementById('model-filter');
+        if (!select) return;
+        
+        const currentValue = select.value;
+        
+        // Limpiar opciones actuales excepto "Todos"
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // Agregar nuevos modelos
+        availableModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            select.appendChild(option);
+        });
+        
+        // Restaurar valor seleccionado si aún existe
+        if (currentValue && availableModels.includes(currentValue)) {
+            select.value = currentValue;
+        }
+    }
+
+    // Exportar datos
+    async function exportData(format) {
+        try {
+            const response = await fetch(`/tracking/export/${format}`);
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `request_tracking_${new Date().toISOString().split('T')[0]}.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                alert(`Datos exportados en formato ${format.toUpperCase()} exitosamente`);
+            } else {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Error exportando datos:', error);
+            showError('Error al exportar datos: ' + error.message);
+        }
+    }
+
+    // Limpiar historial
+    async function clearHistory(mode) {
+        if (!confirm(`¿Está seguro que desea limpiar el historial de ${mode === 'all' ? 'todos los modos' : mode}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/tracking/clear/${mode}`, { 
+                method: 'DELETE' 
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('Historial limpiado exitosamente');
+                currentPage = 1; // Resetear a primera página
+                loadStats();
+                loadRequests();
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            console.error('Error limpiando historial:', error);
+            showError('Error al limpiar historial: ' + error.message);
+        }
+    }
+
+    // Resetear contadores
+    async function resetCounters(mode) {
+        if (!confirm(`¿Está seguro que desea resetear los contadores de ${mode === 'all' ? 'todos los modos' : mode}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/tracking/reset/${mode}`, { 
+                method: 'POST' 
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('Contadores reseteados exitosamente');
+                currentPage = 1; // Resetear a primera página
+                loadStats();
+                loadRequests();
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            console.error('Error reseteando contadores:', error);
+            showError('Error al resetear contadores: ' + error.message);
+        }
+    }
+
+    // Auto-refresh
+    function startAutoRefresh() {
+        autoRefresh = setInterval(() => {
+            loadStats();
+            // No recargar requests automáticamente para no afectar la paginación
+        }, 10000); // Cada 10 segundos
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefresh) {
+            clearInterval(autoRefresh);
+        }
+    }
+
+    // Event listeners para filtros - MEJORADOS
+    function setupFilters() {
+        const filters = ['mode-filter', 'method-filter', 'model-filter', 'limit-filter'];
+        filters.forEach(filterId => {
+            const element = document.getElementById(filterId);
+            if (element) {
+                element.addEventListener('change', () => {
+                    console.log(`🔍 Filtro cambiado: ${filterId}`);
+                    currentPage = 1; // Resetear a primera página al cambiar filtros
+                    loadRequests();
+                });
+            }
+        });
+    }
+
+    // Configurar todo al cargar
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeCharts();
+        loadStats();
+        loadRequests();
+        startAutoRefresh();
+        setupPaginationButtons();
+        setupFilters();
+    });
+
+    // Cleanup al cerrar la página
+    window.addEventListener('beforeunload', stopAutoRefresh);
+</script>
+</body>
+</html>
