@@ -11,7 +11,7 @@ const CallbackService = require('../services/CallbackService');
 const queueService = new QueueService();
 const callbackService = new CallbackService();
 
-// Middleware to handle validation errors
+// validacion de err, ej.: visualiza porque dio error
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -24,8 +24,8 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-// Middleware to ensure services are initialized
-const ensureInitialized = async (req, res, next) => {
+// Not crash
+const ensureInitialized = async (req, res, next) => {  
   try {
     if (!queueService.initialized) {
       await queueService.initialize();
