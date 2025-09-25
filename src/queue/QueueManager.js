@@ -3,7 +3,6 @@ const EventEmitter = require('events');
 const { Worker } = require('worker_threads');
 const path = require('path');
 
-// Task class remains the same but with Redis serialization helpers
 class Task {
   constructor(data) {
     this.id = data.id;
@@ -14,6 +13,7 @@ class Task {
     this.options = data.options || {};
     this.queueName = data.queueName;
     this.status = data.status || "pending";
+     this.threadId = data.threadId;
     this.createdAt = data.createdAt || new Date();
     this.startedAt = data.startedAt;
     this.completedAt = data.completedAt;
@@ -32,6 +32,7 @@ class Task {
       options: this.options,
       queueName: this.queueName,
       status: this.status,
+      threadId: this.threadId, 
       createdAt: this.createdAt?.toISOString(),
       startedAt: this.startedAt?.toISOString(),
       completedAt: this.completedAt?.toISOString(),
@@ -73,7 +74,6 @@ class RedisQueue extends EventEmitter {
   }
 
   async initialize() {
-    console.log(`🔍 [RedisQueue] Initializing queue: ${this.name}`);
     
     try {
       // Initialize stats if not exist
@@ -89,7 +89,6 @@ class RedisQueue extends EventEmitter {
         });
       }
       
-      console.log(`✅ [RedisQueue] Queue ${this.name} initialized successfully`);
     } catch (error) {
       console.error(`❌ [RedisQueue] Error initializing queue ${this.name}:`, error);
       throw error;
@@ -111,55 +110,93 @@ class RedisQueue extends EventEmitter {
 
     const pipeline = this.redis.pipeline();
     
-    // Add to pending queue (FIFO using LPUSH/RPOP)
     pipeline.lpush(this.keys.pending, task.serialize());
     
-    // Store full task data
     pipeline.hset(this.keys.tasks, task.id, task.serialize());
     
-    // Update stats
     pipeline.hincrby(this.keys.stats, 'total', 1);
     pipeline.hincrby(this.keys.stats, 'pending', 1);
     
     await pipeline.exec();
 
     this.emit("task:enqueued", task);
-    console.log(`📥 Task ${task.id} enqueued in ${this.name}`);
     
     return task.id;
   }
 
-  async dequeue() {
-    // Move from pending to processing atomically
+async dequeue(batchSize = 1) {
+  if (batchSize === 1) {
     const taskData = await this.redis.rpoplpush(this.keys.pending, this.keys.processing);
-    
     if (!taskData) return null;
-
+    
     const task = Task.deserialize(taskData);
     task.status = "processing";
     task.startedAt = new Date();
-
+    
     const pipeline = this.redis.pipeline();
-    
-    // Update task data
     pipeline.hset(this.keys.tasks, task.id, task.serialize());
-    
-    // Update stats
     pipeline.hincrby(this.keys.stats, 'pending', -1);
     pipeline.hincrby(this.keys.stats, 'processing', 1);
-    
     await pipeline.exec();
-
-    this.emit("task:dequeued", task);
+    
     return task;
   }
+
+  // NUEVO: Procesamiento por lotes
+  const tasks = [];
+  const pipeline = this.redis.pipeline();
+  
+  // Usar un script Lua para operación atómica
+  const luaScript = `
+    local batchSize = tonumber(ARGV[1])
+    local pendingKey = KEYS[1]
+    local processingKey = KEYS[2]
+    local results = {}
+    
+    for i = 1, batchSize do
+      local task = redis.call('rpoplpush', pendingKey, processingKey)
+      if task then
+        table.insert(results, task)
+      else
+        break
+      end
+    end
+    
+    return results
+  `;
+  
+  const taskDataArray = await this.redis.eval(
+    luaScript, 
+    2, 
+    this.keys.pending, 
+    this.keys.processing, 
+    batchSize
+  );
+
+  if (!taskDataArray || taskDataArray.length === 0) return [];
+
+  for (const taskData of taskDataArray) {
+    const task = Task.deserialize(taskData);
+    task.status = "processing";
+    task.startedAt = new Date();
+    
+    pipeline.hset(this.keys.tasks, task.id, task.serialize());
+    tasks.push(task);
+  }
+  
+  pipeline.hincrby(this.keys.stats, 'pending', -taskDataArray.length);
+  pipeline.hincrby(this.keys.stats, 'processing', taskDataArray.length);
+  await pipeline.exec();
+
+  return tasks;
+}
 
   async getTask(taskId) {
     const taskData = await this.redis.hget(this.keys.tasks, taskId);
     return taskData ? Task.deserialize(taskData) : null;
   }
 
-  async updateTaskStatus(taskId, status, result = null, error = null) {
+  async updateTaskStatus(taskId, status, result = null, error = null, threadId =null) {
     const taskData = await this.redis.hget(this.keys.tasks, taskId);
     if (!taskData) return false;
 
@@ -168,6 +205,7 @@ class RedisQueue extends EventEmitter {
     
     task.status = status;
     task.completedAt = new Date();
+    if (threadId) task.threadId = threadId;
 
     if (result) task.result = result;
     if (error) {
@@ -237,7 +275,6 @@ class RedisQueue extends EventEmitter {
   }
 
   async getStats() {
-   // console.log(`🔍 [RedisQueue] Getting stats for queue: ${this.name}`);
     
     try {
       const stats = await this.redis.hgetall(this.keys.stats);
@@ -290,6 +327,7 @@ class RedisQueue extends EventEmitter {
             status: task.status,
             model: task.model,
             operation: task.operation,
+            threadId: task.threadId,
             createdAt: task.createdAt,
             startedAt: task.startedAt,
             completedAt: task.completedAt,
@@ -309,6 +347,7 @@ class RedisQueue extends EventEmitter {
           status: task.status,
           model: task.model,
           operation: task.operation,
+            threadId: task.threadId,
           createdAt: task.createdAt,
           startedAt: task.startedAt,
           completedAt: task.completedAt,
@@ -371,12 +410,10 @@ class QueueWorker extends EventEmitter {
       startedAt: null
     };
     
-    console.log(` QueueWorker ${this.id} created with ${this.threadCount} threads`);
   }
 
   async start() {
     if (this.isRunning) {
-      console.log(`⚠️ Worker ${this.id} is already running`);
       return;
     }
 
@@ -409,23 +446,19 @@ class QueueWorker extends EventEmitter {
     }
 
     this.processLoop();
-    console.log(`✅ QueueWorker ${this.id} started with ${this.threadCount} threads`);
     this.emit('worker:started', { workerId: this.id });
   }
 
   async stop(graceful = true) {
     if (!this.isRunning) {
-      console.log(`⚠️ Worker ${this.id} is already stopped`);
       return;
     }
 
-    console.log(`🔄 Stopping QueueWorker ${this.id}${graceful ? ' (graceful)' : ' (forced)'}...`);
 
     this.isRunning = false;
     this.isPaused = false;
 
     if (graceful) {
-      console.log(`⏳ Waiting for ${this.processingTasks.size} tasks to complete...`);
       while (this.processingTasks.size > 0) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
@@ -434,7 +467,6 @@ class QueueWorker extends EventEmitter {
     await Promise.all(this.workers.map((worker) => worker.terminate()));
     this.workers = [];
 
-    console.log(`✅ QueueWorker ${this.id} stopped`);
     this.emit('worker:stopped', { workerId: this.id, graceful });
   }
 
@@ -444,7 +476,6 @@ class QueueWorker extends EventEmitter {
     }
     
     this.isPaused = true;
-    console.log(`⏸️ QueueWorker ${this.id} paused`);
     this.emit('worker:paused', { workerId: this.id });
   }
 
@@ -454,12 +485,10 @@ class QueueWorker extends EventEmitter {
     }
     
     if (!this.isPaused) {
-      console.log(`⚠️ Worker ${this.id} is not paused`);
       return;
     }
     
     this.isPaused = false;
-    console.log(`▶️ QueueWorker ${this.id} resumed`);
     this.emit('worker:resumed', { workerId: this.id });
   }
 
@@ -505,7 +534,6 @@ class QueueWorker extends EventEmitter {
     this.stats.lastActivity = new Date();
 
     try {
-      console.log(`🔧 Processing task ${task.id} with worker thread ${availableWorker.threadId}`);
       
       availableWorker.postMessage({
         type: 'process',
@@ -529,10 +557,9 @@ class QueueWorker extends EventEmitter {
 
     switch (type) {
       case 'task:completed':
-        await this.queue.updateTaskStatus(taskId, 'completed', result);
+        await this.queue.updateTaskStatus(taskId, 'completed', result, null, threadId);
         this.stats.totalCompleted++;
         
-        console.log(`✅ Task ${taskId} completed successfully`);
         this.emit('task:completed', { taskId, result, workerId: this.id });
         
         if (this.callbacks.onTaskCompleted) {
@@ -553,7 +580,6 @@ class QueueWorker extends EventEmitter {
         const shouldRetry = await this.queue.requeueTask(taskId);
         this.stats.totalFailed++;
         
-        console.log(`⚠️ Task ${taskId} failed, retry: ${shouldRetry}`);
         this.emit('task:failed', { taskId, error, retry: shouldRetry, workerId: this.id });
         
         if (this.callbacks.onTaskFailed) {
@@ -572,10 +598,9 @@ class QueueWorker extends EventEmitter {
         break;
 
       case 'task:error':
-        await this.queue.updateTaskStatus(taskId, 'error', null, error);
+        await this.queue.updateTaskStatus(taskId, 'error', null, error, threadId);
         this.stats.totalErrors++;
         
-        console.log(`❌ Task ${taskId} error: ${error}`);
         this.emit('task:error', { taskId, error, workerId: this.id });
         
         if (this.callbacks.onTaskError) {
@@ -614,7 +639,6 @@ class QueueWorker extends EventEmitter {
       ...this.callbacks,
       ...callbacks
     };
-    console.log(`🔧 Updated callbacks for worker ${this.id}`);
   }
 }
 
@@ -628,7 +652,6 @@ class QueueManager extends EventEmitter {
     this.retryDelay = options.retryDelay || 1000;
     this.initialized = false;
     
-    // Redis connection
     this.redis = new Redis({
       host: options.redisHost || process.env.REDIS_HOST || 'localhost',
       port: options.redisPort || process.env.REDIS_PORT || 6379,
@@ -643,19 +666,13 @@ class QueueManager extends EventEmitter {
   async initialize() {
     if (this.initialized) return;
 
-    console.log("✅ RedisQueueManager - Starting initialization");
 
     try {
-      // Test Redis connection
       await this.redis.ping();
-      console.log("✅ RedisQueueManager - Redis connection established");
 
-      // Load existing queues from Redis
       await this.loadPersistedQueues();
-      console.log("✅ RedisQueueManager - Persisted queues loaded");
 
       this.initialized = true;
-      console.log("✅ RedisQueueManager initialized");
     } catch (error) {
       console.error("❌ Error initializing RedisQueueManager:", error);
       throw error;
@@ -664,15 +681,11 @@ class QueueManager extends EventEmitter {
 
   async loadPersistedQueues() {
     try {
-      // Get all queue keys
       const keys = await this.redis.keys('queue:*:stats');
-      const queueNames = keys.map(key => key.split(':')[1]);
-      
-      console.log(`📁 Found ${queueNames.length} persisted queues in Redis`);
+      const queueNames = keys.map(key => key.split(':')[1]);      
 
       for (const queueName of queueNames) {
         if (!this.queues.has(queueName)) {
-          console.log(`📥 Loading queue: ${queueName}`);
           
           const queue = new RedisQueue(queueName, {
             redis: this.redis,
@@ -683,7 +696,6 @@ class QueueManager extends EventEmitter {
           await queue.initialize();
           this.queues.set(queueName, queue);
           
-          console.log(`✅ Queue '${queueName}' loaded successfully`);
         }
       }
     } catch (error) {
@@ -708,9 +720,9 @@ class QueueManager extends EventEmitter {
       maxRetries: this.maxRetries,
       retryDelay: this.retryDelay,
     });
-
+//a
     await queue.initialize();
-    this.queues.set(queueName, queue);
+    this.queues.set(queueName, queue); 
 
     console.log(`✅ Queue '${queueName}' created`);
     return queue;
@@ -744,11 +756,13 @@ class QueueManager extends EventEmitter {
     if (!queue) {
       throw new Error(`Queue '${queueName}' not found`);
     }
-
+//a
     const workerId = `${queueName}_worker_${Date.now()}`;
     const worker = new QueueWorker(workerId, queue, threadCount, options);
 
     this.workers.set(workerId, worker);
+
+    worker.batchSize = options.batchSize || 1;
     
     if (options.autoStart !== false) {
       await worker.start();
@@ -768,7 +782,6 @@ class QueueManager extends EventEmitter {
   }
 
   async getQueueStats(queueName) {
-    console.log(`🔍 [RedisQueueManager] Getting stats for queue: ${queueName}`);
 
     if (!queueName || typeof queueName !== "string") {
       console.error(`❌ [RedisQueueManager] Invalid queueName:`, queueName);
@@ -777,13 +790,11 @@ class QueueManager extends EventEmitter {
 
     const queue = await this.getQueue(queueName);
     if (!queue) {
-      console.log(`❌ [RedisQueueManager] Queue '${queueName}' not found`);
       return null;
     }
 
     try {
       const stats = await queue.getStats();
-      console.log(`✅ [RedisQueueManager] Stats obtained:`, stats);
       return stats;
     } catch (error) {
       console.error(`❌ [RedisQueueManager] Error in queue.getStats():`, error);
@@ -800,27 +811,19 @@ class QueueManager extends EventEmitter {
   }
 
   async shutdown() {
-    console.log("🔄 Shutting down RedisQueueManager...");
-
-    // Stop all workers
     const workerPromises = Array.from(this.workers.values()).map((worker) =>
       worker.stop()
     );
     await Promise.all(workerPromises);
-
-    // Clean up all queues
     const queuePromises = Array.from(this.queues.values()).map((queue) =>
       queue.destroy()
     );
     await Promise.all(queuePromises);
-
-    // Close Redis connection
     await this.redis.quit();
 
     this.queues.clear();
     this.workers.clear();
 
-    console.log("✅ RedisQueueManager shutdown complete");
   }
 }
 

@@ -262,18 +262,21 @@ router.delete('/:queueName/clear/:status',
 router.post('/:queueName/workers',
   [
     param('queueName').isString().isLength({ min: 1 }).withMessage('Queue name is required'),
-    body('threadCount').default(1).isInt({ min: 1, max: 10 }).withMessage('Thread count must be between 1 and 10'),
-    body('autoStart').default(false).isBoolean().withMessage('autoStart must be boolean')
+    body('threadCount').default(1).isInt({ min: 1, max: 100 }).withMessage('Thread count must be between 1 and 100'),
+    body('autoStart').default(false).isBoolean().withMessage('autoStart must be boolean'),
+    
+    body('batchSize').default(2).isInt({ min: 1, max: 200 }).withMessage('batchSize must be between 1 and 200') // NUEVO
   ],
   handleValidationErrors,
   ensureInitialized,
   async (req, res) => {
     try {
       const { queueName } = req.params;
-      const { threadCount, autoStart } = req.body;
+      const { threadCount, autoStart, batchSize } = req.body; // NUEVO: batchSize
       
       const result = await queueService.createWorker(queueName, threadCount, {
         autoStart,
+        batchSize, // NUEVO
         onTaskCompleted: async (data) => {
           await callbackService.executeCallbacks('task:completed', data);
         },
