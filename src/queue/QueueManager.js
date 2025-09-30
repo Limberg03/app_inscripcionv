@@ -53,7 +53,6 @@ class Task {
   }
 }
 
-// Redis-based Queue implementation
 class RedisQueue extends EventEmitter {
   constructor(name, options = {}) {
     super();
@@ -76,7 +75,6 @@ class RedisQueue extends EventEmitter {
   async initialize() {
     
     try {
-      // Initialize stats if not exist
       const statsExist = await this.redis.exists(this.keys.stats);
       if (!statsExist) {
         await this.redis.hmset(this.keys.stats, {
@@ -142,11 +140,10 @@ async dequeue(batchSize = 1) {
     return task;
   }
 
-  // NUEVO: Procesamiento por lotes
+  // Procesamiento por lotes
   const tasks = [];
   const pipeline = this.redis.pipeline();
   
-  // Usar un script Lua para operación atómica
   const luaScript = `
     local batchSize = tonumber(ARGV[1])
     local pendingKey = KEYS[1]
@@ -215,16 +212,13 @@ async dequeue(batchSize = 1) {
 
     const pipeline = this.redis.pipeline();
     
-    // Update task data
     pipeline.hset(this.keys.tasks, taskId, task.serialize());
     
-    // Move from processing to appropriate status queue
     if (oldStatus === 'processing') {
       pipeline.lrem(this.keys.processing, 1, Task.deserialize(taskData).serialize());
       pipeline.hincrby(this.keys.stats, 'processing', -1);
     }
     
-    // Add to status-specific queue
     if (status === 'completed') {
       pipeline.lpush(this.keys.completed, task.serialize());
       pipeline.hincrby(this.keys.stats, 'completed', 1);
@@ -255,16 +249,12 @@ async dequeue(batchSize = 1) {
     
     const pipeline = this.redis.pipeline();
     
-    // Remove from processing
     pipeline.lrem(this.keys.processing, 1, taskData);
     
-    // Add back to pending
     pipeline.lpush(this.keys.pending, task.serialize());
     
-    // Update task data
     pipeline.hset(this.keys.tasks, taskId, task.serialize());
     
-    // Update stats
     pipeline.hincrby(this.keys.stats, 'processing', -1);
     pipeline.hincrby(this.keys.stats, 'pending', 1);
     
@@ -279,7 +269,6 @@ async dequeue(batchSize = 1) {
     try {
       const stats = await this.redis.hgetall(this.keys.stats);
       
-      // Convert string values to numbers
       const numericStats = {};
       for (const [key, value] of Object.entries(stats)) {
         numericStats[key] = parseInt(value) || 0;

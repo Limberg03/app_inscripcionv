@@ -721,11 +721,9 @@
         }
     }
 
-    // NUEVA FUNCIÓN: Para mostrar el modal con los detalles
     function showTaskDetailsModal(task) {
         if (!task) return;
 
-        // Formatear fechas de forma segura
         const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleString() : 'N/A';
 
         // Poblar datos básicos
