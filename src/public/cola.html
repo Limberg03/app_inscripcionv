@@ -1,685 +1,946 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard de Colas Redis</title>
     <style>
-        :root {
-            --bg-color: #1a1a1a;
-            --panel-bg: #2c2c2c;
-            --header-bg: #222;
-            --border-color: #444;
-            --text-color: #f0f0f0;
-            --text-muted: #999;
-            --accent-color: #007bff;
-            --accent-hover: #0056b3;
-            --green: #28a745;
-            --yellow: #ffc107;
-            --red: #dc3545;
-            --blue: #17a2b8;
-            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
+      :root {
+        --bg-color: #1a1a1a;
+        --panel-bg: #2c2c2c;
+        --header-bg: #222;
+        --border-color: #444;
+        --text-color: #f0f0f0;
+        --text-muted: #999;
+        --accent-color: #007bff;
+        --accent-hover: #0056b3;
+        --green: #28a745;
+        --yellow: #ffc107;
+        --red: #dc3545;
+        --blue: #17a2b8;
+        --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, Arial, sans-serif;
+      }
 
-        body {
-            font-family: var(--font-family);
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            font-size: 14px;
-        }
+      body {
+        font-family: var(--font-family);
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        padding: 20px;
+        font-size: 14px;
+      }
 
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-        }
+      .container {
+        max-width: 1600px;
+        margin: 0 auto;
+      }
 
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 20px;
-            background-color: var(--header-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        
-        header h1 {
-            margin: 0;
-            font-size: 1.5em;
-        }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 20px;
+        background-color: var(--header-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
 
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+      header h1 {
+        margin: 0;
+        font-size: 1.5em;
+      }
 
-        .status-light {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            transition: background-color 0.3s;
-        }
-        .status-light.connected { background-color: var(--green); }
-        .status-light.disconnected { background-color: var(--red); }
-        
-        .toggle-switch {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .toggle-switch input { display: none; }
-        .toggle-switch label {
-            cursor: pointer;
-            background-color: #555;
-            width: 40px;
-            height: 20px;
-            border-radius: 10px;
-            position: relative;
-            transition: background-color 0.2s;
-        }
-        .toggle-switch label::after {
-            content: '';
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background-color: white;
-            transition: transform 0.2s;
-        }
-        .toggle-switch input:checked + label { background-color: var(--accent-color); }
-        .toggle-switch input:checked + label::after { transform: translateX(20px); }
+      .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
 
+      .status-light {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        transition: background-color 0.3s;
+      }
+      .status-light.connected {
+        background-color: var(--green);
+      }
+      .status-light.disconnected {
+        background-color: var(--red);
+      }
 
+      .toggle-switch {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .toggle-switch input {
+        display: none;
+      }
+      .toggle-switch label {
+        cursor: pointer;
+        background-color: #555;
+        width: 40px;
+        height: 20px;
+        border-radius: 10px;
+        position: relative;
+        transition: background-color 0.2s;
+      }
+      .toggle-switch label::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background-color: white;
+        transition: transform 0.2s;
+      }
+      .toggle-switch input:checked + label {
+        background-color: var(--accent-color);
+      }
+      .toggle-switch input:checked + label::after {
+        transform: translateX(20px);
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: 350px 1fr;
+        gap: 20px;
+      }
+
+      .panel {
+        background-color: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .panel h2 {
+        margin: 0 0 10px 0;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 10px;
+      }
+
+      #queues-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      #queues-list li {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--border-color);
+        cursor: pointer;
+        transition: background-color 0.2s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      #queues-list li:hover,
+      #queues-list li.active {
+        background-color: #3a3a3a;
+      }
+      #queues-list li:last-child {
+        border-bottom: none;
+      }
+
+      .queue-stats-summary {
+        font-size: 0.8em;
+        color: var(--text-muted);
+      }
+      .queue-stats-summary span {
+        margin-left: 5px;
+      }
+
+      .form-group {
+        display: flex;
+        gap: 10px;
+      }
+      .form-group input {
+        flex-grow: 1;
+      }
+
+      input[type="text"],
+      input[type="number"] {
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        padding: 8px;
+        border-radius: 4px;
+      }
+
+      .btn {
+        padding: 8px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: opacity 0.2s;
+      }
+      .btn:hover {
+        opacity: 0.8;
+      }
+      .btn-primary {
+        background-color: var(--accent-color);
+        color: white;
+      }
+      .btn-danger {
+        background-color: var(--red);
+        color: white;
+      }
+      .btn-sm {
+        padding: 4px 8px;
+        font-size: 0.8em;
+      }
+      .btn-icon {
+        background: none;
+        color: var(--text-muted);
+        padding: 4px;
+      }
+      .btn-icon:hover {
+        color: var(--text-color);
+      }
+
+      #details-panel {
+        min-height: 60vh;
+      }
+
+      #placeholder {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        color: var(--text-muted);
+        font-size: 1.2em;
+      }
+
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+      }
+      thead {
+        background-color: #333;
+      }
+
+      .status-tag {
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        color: white;
+        display: inline-block;
+      }
+      .status-tag.running,
+      .status-tag.completed {
+        background-color: var(--green);
+      }
+      .status-tag.paused {
+        background-color: var(--yellow);
+        color: #333;
+      }
+      .status-tag.stopped,
+      .status-tag.failed,
+      .status-tag.error {
+        background-color: var(--red);
+      }
+      .status-tag.pending {
+        background-color: var(--blue);
+      }
+      .status-tag.processing {
+        background-color: var(--accent-color);
+      }
+
+      .task-filters {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .task-filters .btn {
+        background-color: #444;
+        color: var(--text-color);
+      }
+      .task-filters .btn.active {
+        background-color: var(--accent-color);
+      }
+
+      .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid var(--accent-color);
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: spin 1s linear infinite;
+        display: none;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 900px) {
         .dashboard-grid {
-            display: grid;
-            grid-template-columns: 350px 1fr;
-            gap: 20px;
+          grid-template-columns: 1fr;
         }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Dashboard de Colas</h1>
+        <div class="status-indicator">
+          <div class="loader" id="loader"></div>
+          <div class="toggle-switch">
+            <span>Auto-refresh</span>
+            <input type="checkbox" id="auto-refresh-toggle" checked />
+            <label for="auto-refresh-toggle"></label>
+          </div>
+          <span>API Status:</span>
+          <div id="api-status-light" class="status-light disconnected"></div>
+          <span id="api-status-text">Disconnected</span>
+        </div>
+      </header>
 
-        .panel {
+      <main class="dashboard-grid">
+        <div class="panel" id="queues-panel">
+          <section class="section">
+            <h2>Colas</h2>
+            <ul id="queues-list"></ul>
+          </section>
+          <section class="section">
+            <h3>Crear Nueva Cola</h3>
+            <form id="create-queue-form" class="form-group">
+              <input
+                type="text"
+                id="new-queue-name"
+                placeholder="Nombre de la cola"
+                required
+              />
+              <button type="submit" class="btn btn-primary">Crear</button>
+            </form>
+          </section>
+        </div>
+
+        <div class="panel" id="details-panel">
+          <div id="placeholder">Selecciona una cola para ver los detalles.</div>
+          <div id="queue-details" style="display: none">
+            <section class="section" id="workers-section">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                "
+              >
+                <h2 id="details-title">Workers</h2>
+                <button class="btn btn-danger btn-sm" id="delete-queue-btn">
+                  Eliminar Cola
+                </button>
+              </div>
+              <div
+                id="batch-stats"
+                style="
+                  display: flex;
+                  gap: 15px;
+                  margin-bottom: 15px;
+                  font-size: 0.9em;
+                "
+              ></div>
+              <table id="workers-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Estado</th>
+                    <th>Hilos</th>
+                    <th>Lote</th>
+                    <!-- <th>Procesando</th> -->
+                    <th>Completados</th>
+                    <th>Fallidos</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="workers-table-body"></tbody>
+              </table>
+              <form
+                id="create-worker-form"
+                style="display: flex; flex-direction: column; gap: 10px"
+              >
+                <div>
+                  <label>Hilos :</label>
+                  <input
+                    type="number"
+                    id="new-worker-threads"
+                    value="1"
+                    min="1"
+                    max="100"
+                  />
+                </div>
+                <div>
+                  <label>Tamaño Lote :</label>
+                  <input
+                    type="number"
+                    id="new-worker-batch-size"
+                    value="3"
+                    min="1"
+                    max="200"
+                  />
+                </div>
+                <button type="submit" class="btn btn-primary">
+                  Crear Worker
+                </button>
+              </form>
+            </section>
+
+            <hr style="border-color: var(--border-color); margin: 20px 0" />
+
+            <section class="section" id="tasks-section">
+              <h2>Tareas</h2>
+              <div class="task-filters" id="task-filters">
+                <button class="btn btn-sm active" data-status="pending">
+                  Pendientes
+                </button>
+                <!-- <button class="btn btn-sm" data-status="processing">Procesando</button> -->
+                <button class="btn btn-sm" data-status="completed">
+                  Completadas
+                </button>
+                <button class="btn btn-sm" data-status="failed">
+                  Fallidas/Error
+                </button>
+              </div>
+              <table id="tasks-table">
+                <thead>
+                  <tr>
+                    <th>ID Tarea</th>
+                    <th>Estado</th>
+                    <th>Modelo</th>
+                    <th>Operación</th>
+                    <th>Thread ID</th>
+                    <th>Creado</th>
+                  </tr>
+                </thead>
+                <tbody id="tasks-table-body"></tbody>
+              </table>
+              <div
+                id="tasks-placeholder"
+                style="
+                  text-align: center;
+                  padding: 20px;
+                  color: var(--text-muted);
+                "
+              ></div>
+            </section>
+          </div>
+        </div>
+      </main>
+      <div
+        id="task-details-modal"
+        style="
+          display: none;
+          position: fixed;
+          z-index: 1000;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          overflow: auto;
+          background-color: rgba(0, 0, 0, 0.7);
+        "
+      >
+        <div
+          style="
             background-color: var(--panel-bg);
+            margin: 10% auto;
+            padding: 20px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        .panel h2 {
-            margin: 0 0 10px 0;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-        }
-        
-        #queues-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        #queues-list li {
-            padding: 12px 10px;
-            border-bottom: 1px solid var(--border-color);
-            cursor: pointer;
-            transition: background-color 0.2s;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        #queues-list li:hover, #queues-list li.active {
-            background-color: #3a3a3a;
-        }
-        #queues-list li:last-child {
-            border-bottom: none;
-        }
-        
-        .queue-stats-summary {
-            font-size: 0.8em;
-            color: var(--text-muted);
-        }
-        .queue-stats-summary span {
-            margin-left: 5px;
-        }
+            width: 80%;
+            max-width: 700px;
+            position: relative;
+          "
+        >
+          <span
+            id="modal-close-btn"
+            style="
+              color: #aaa;
+              float: right;
+              font-size: 28px;
+              font-weight: bold;
+              cursor: pointer;
+            "
+            >&times;</span
+          >
+          <h2>Detalles de la Tarea</h2>
+          <div
+            id="modal-content"
+            style="max-height: 60vh; overflow-y: auto; padding-right: 15px"
+          >
+            <p><strong>ID Tarea:</strong> <span id="modal-task-id"></span></p>
+            <p><strong>Estado:</strong> <span id="modal-task-status"></span></p>
+            <p><strong>Modelo:</strong> <span id="modal-task-model"></span></p>
+            <p>
+              <strong>Operación:</strong>
+              <span id="modal-task-operation"></span>
+            </p>
+            <p>
+              <strong>Worker ID:</strong> <span id="modal-task-worker"></span>
+            </p>
+            <p>
+              <strong>Creado:</strong> <span id="modal-task-created"></span>
+            </p>
+            <p>
+              <strong>Iniciado:</strong> <span id="modal-task-started"></span>
+            </p>
+            <p>
+              <strong>Completado:</strong>
+              <span id="modal-task-completed"></span>
+            </p>
 
-        .form-group {
-            display: flex;
-            gap: 10px;
-        }
-        .form-group input {
-            flex-grow: 1;
-        }
-        
-        input[type="text"], input[type="number"] {
-            background-color: var(--bg-color);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 8px;
-            border-radius: 4px;
-        }
-        
-        .btn {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: opacity 0.2s;
-        }
-        .btn:hover {
-            opacity: 0.8;
-        }
-        .btn-primary { background-color: var(--accent-color); color: white; }
-        .btn-danger { background-color: var(--red); color: white; }
-        .btn-sm { padding: 4px 8px; font-size: 0.8em; }
-        .btn-icon { background: none; color: var(--text-muted); padding: 4px; }
-        .btn-icon:hover { color: var(--text-color); }
-        
-        #details-panel {
-            min-height: 60vh;
-        }
-        
-        #placeholder {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            color: var(--text-muted);
-            font-size: 1.2em;
-        }
-        
-        .section {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }
-        thead {
-            background-color: #333;
-        }
-        
-        .status-tag {
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.8em;
-            color: white;
-            display: inline-block;
-        }
-        .status-tag.running, .status-tag.completed { background-color: var(--green); }
-        .status-tag.paused { background-color: var(--yellow); color: #333; }
-        .status-tag.stopped, .status-tag.failed, .status-tag.error { background-color: var(--red); }
-        .status-tag.pending { background-color: var(--blue); }
-        .status-tag.processing { background-color: var(--accent-color); }
-
-        .task-filters {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .task-filters .btn {
-            background-color: #444;
-            color: var(--text-color);
-        }
-        .task-filters .btn.active {
-            background-color: var(--accent-color);
-        }
-
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--accent-color);
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: none;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 900px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-</head>
-<body>
-
-    <div class="container">
-        <header>
-            <h1>Dashboard de Colas</h1>
-            <div class="status-indicator">
-                <div class="loader" id="loader"></div>
-                 <div class="toggle-switch">
-                    <span>Auto-refresh</span>
-                    <input type="checkbox" id="auto-refresh-toggle" checked>
-                    <label for="auto-refresh-toggle"></label>
-                </div>
-                <span>API Status:</span>
-                <div id="api-status-light" class="status-light disconnected"></div>
-                <span id="api-status-text">Disconnected</span>
-            </div>
-        </header>
-
-        <main class="dashboard-grid">
-            <div class="panel" id="queues-panel">
-                <section class="section">
-                    <h2>Colas</h2>
-                    <ul id="queues-list">
-                        </ul>
-                </section>
-                <section class="section">
-                    <h3>Crear Nueva Cola</h3>
-                    <form id="create-queue-form" class="form-group">
-                        <input type="text" id="new-queue-name" placeholder="Nombre de la cola" required>
-                        <button type="submit" class="btn btn-primary">Crear</button>
-                    </form>
-                </section>
+            <div id="modal-error-section" style="display: none">
+              <strong>Error:</strong>
+              <pre
+                style="
+                  background-color: rgba(220, 53, 69, 0.1);
+                  color: #ff8a8a;
+                  padding: 10px;
+                  border-radius: 4px;
+                  white-space: pre-wrap;
+                  word-wrap: break-word;
+                "
+              ></pre>
             </div>
 
-            <div class="panel" id="details-panel">
-                <div id="placeholder">Selecciona una cola para ver los detalles.</div>
-                <div id="queue-details" style="display: none;">
-                    
-                    <section class="section" id="workers-section">
-                        <div style="display:flex; justify-content: space-between; align-items:center;">
-                             <h2 id="details-title">Workers</h2>
-                             <button class="btn btn-danger btn-sm" id="delete-queue-btn">Eliminar Cola</button>
-                        </div>
-                        <table id="workers-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Estado</th>
-                                    <th>Hilos</th>
-                                    <!-- <th>Procesando</th> -->
-                                    <th>Completados</th>
-                                    <th>Fallidos</th>
-                                    <th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="workers-table-body"></tbody>
-                        </table>
-                        <form id="create-worker-form" class="form-group">
-                            <input type="number" id="new-worker-threads" value="1" min="1" max="10">
-                            <button type="submit" class="btn btn-primary">Crear Worker</button>
-                        </form>
-                    </section>
-
-                    <hr style="border-color: var(--border-color); margin: 20px 0;">
-
-                    <section class="section" id="tasks-section">
-                        <h2>Tareas</h2>
-                         <div class="task-filters" id="task-filters">
-                            <button class="btn btn-sm active" data-status="pending">Pendientes</button>
-                            <!-- <button class="btn btn-sm" data-status="processing">Procesando</button> -->
-                            <button class="btn btn-sm" data-status="completed">Completadas</button>
-                            <button class="btn btn-sm" data-status="failed">Fallidas/Error</button>
-                         </div>
-                        <table id="tasks-table">
-                            <thead>
-                                <tr>
-                                    <th>ID Tarea</th>
-                                    <th>Estado</th>
-                                    <th>Modelo</th>
-                                    <th>Operación</th>
-                                    <th>Creado</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tasks-table-body"></tbody>
-                        </table>
-                         <div id="tasks-placeholder" style="text-align:center; padding: 20px; color: var(--text-muted);"></div>
-                    </section>
-
-                </div>
+            <div id="modal-result-section" style="display: none">
+              <strong>Resultado:</strong>
+              <pre
+                style="
+                  background-color: #333;
+                  padding: 10px;
+                  border-radius: 4px;
+                  white-space: pre-wrap;
+                  word-wrap: break-word;
+                "
+              ></pre>
             </div>
-        </main>
+
+            <div id="modal-data-section" style="display: none">
+              <strong>Datos Enviados (Data):</strong>
+              <pre
+                style="
+                  background-color: #333;
+                  padding: 10px;
+                  border-radius: 4px;
+                  white-space: pre-wrap;
+                  word-wrap: break-word;
+                "
+              ></pre>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script>
-        const API_BASE_URL = 'http://localhost:3000/queue';
+   <script>
+    const API_BASE_URL = "http://localhost:3000/queue";
 
-        const state = {
-            selectedQueue: null,
-            selectedTaskStatus: 'pending',
-            pollingInterval: null,
-            autoRefresh: true,
-        };
+    const state = {
+        selectedQueue: null,
+        selectedTaskStatus: "pending",
+        pollingInterval: null,
+        autoRefresh: true,
+    };
 
-        // Elementos del DOM
-        const dom = {
-            loader: document.getElementById('loader'),
-            apiStatusLight: document.getElementById('api-status-light'),
-            apiStatusText: document.getElementById('api-status-text'),
-            autoRefreshToggle: document.getElementById('auto-refresh-toggle'),
-            queuesList: document.getElementById('queues-list'),
-            detailsPanel: document.getElementById('details-panel'),
-            placeholder: document.getElementById('placeholder'),
-            queueDetails: document.getElementById('queue-details'),
-            detailsTitle: document.getElementById('details-title'),
-            deleteQueueBtn: document.getElementById('delete-queue-btn'),
-            workersTableBody: document.getElementById('workers-table-body'),
-            tasksTableBody: document.getElementById('tasks-table-body'),
-            taskFilters: document.getElementById('task-filters'),
-            tasksPlaceholder: document.getElementById('tasks-placeholder'),
-            createQueueForm: document.getElementById('create-queue-form'),
-            newQueueNameInput: document.getElementById('new-queue-name'),
-            createWorkerForm: document.getElementById('create-worker-form'),
-            newWorkerThreadsInput: document.getElementById('new-worker-threads'),
-        };
+    // Elementos del DOM
+    const dom = {
+        loader: document.getElementById("loader"),
+        apiStatusLight: document.getElementById("api-status-light"),
+        apiStatusText: document.getElementById("api-status-text"),
+        autoRefreshToggle: document.getElementById("auto-refresh-toggle"),
+        queuesList: document.getElementById("queues-list"),
+        detailsPanel: document.getElementById("details-panel"),
+        placeholder: document.getElementById("placeholder"),
+        queueDetails: document.getElementById("queue-details"),
+        detailsTitle: document.getElementById("details-title"),
+        deleteQueueBtn: document.getElementById("delete-queue-btn"),
+        workersTableBody: document.getElementById("workers-table-body"),
+        tasksTableBody: document.getElementById("tasks-table-body"),
+        taskFilters: document.getElementById("task-filters"),
+        tasksPlaceholder: document.getElementById("tasks-placeholder"),
+        createQueueForm: document.getElementById("create-queue-form"),
+        newQueueNameInput: document.getElementById("new-queue-name"),
+        createWorkerForm: document.getElementById("create-worker-form"),
+        newWorkerThreadsInput: document.getElementById("new-worker-threads"),
+        // NUEVOS ELEMENTOS DEL MODAL
+        taskDetailsModal: document.getElementById('task-details-modal'),
+        modalCloseBtn: document.getElementById('modal-close-btn'),
+    };
 
-        // --- FUNCIONES DE API ---
-
-        async function apiCall(endpoint, options = {}) {
-            dom.loader.style.display = 'block';
-            try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || `Error ${response.status}`);
-                }
-                return response.json();
-            } catch (error) {
-                console.error(`API Call Error (${endpoint}):`, error);
-                updateApiStatus(false, error.message);
-                throw error;
-            } finally {
-                dom.loader.style.display = 'none';
+    // --- FUNCIONES DE API --- (Sin cambios aquí)
+    async function apiCall(endpoint, options = {}) {
+        dom.loader.style.display = "block";
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Error ${response.status}`);
             }
+            return response.json();
+        } catch (error) {
+            console.error(`API Call Error (${endpoint}):`, error);
+            updateApiStatus(false, error.message);
+            throw error;
+        } finally {
+            dom.loader.style.display = "none";
         }
+    }
 
-        // --- FUNCIONES DE RENDERIZADO ---
-        
-        function updateApiStatus(connected, message = '') {
-            if (connected) {
-                dom.apiStatusLight.className = 'status-light connected';
-                dom.apiStatusText.textContent = 'Connected';
+    // --- FUNCIONES DE RENDERIZADO ---
+    
+    // (renderQueues y renderWorkers sin cambios)
+    function updateApiStatus(connected, message = "") {
+        if (connected) {
+            dom.apiStatusLight.className = "status-light connected";
+            dom.apiStatusText.textContent = "Connected";
+        } else {
+            dom.apiStatusLight.className = "status-light disconnected";
+            dom.apiStatusText.textContent = "Disconnected";
+        }
+    }
+
+    function renderQueues(queues) {
+        dom.queuesList.innerHTML = "";
+        if (Object.keys(queues).length === 0) {
+            dom.queuesList.innerHTML = "<li>No hay colas creadas.</li>";
+            return;
+        }
+        for (const queueName in queues) {
+            const stats = queues[queueName];
+            const li = document.createElement("li");
+            li.dataset.queueName = queueName;
+            if (state.selectedQueue === queueName) {
+                li.classList.add("active");
+            }
+            li.innerHTML = `
+                <span>${queueName}</span>
+                <span class="queue-stats-summary">
+                    <span>⏳ ${stats.pending || 0}</span>
+                    <span>⚙️ ${stats.processing || 0}</span>
+                    <span>✅ ${stats.completed || 0}</span>
+                    <span>❌ ${stats.failed || 0}</span>
+                </span>`;
+            dom.queuesList.appendChild(li);
+        }
+    }
+
+    function renderWorkers(workers) {
+        dom.workersTableBody.innerHTML = "";
+        const filteredWorkers = workers.filter(w => w.queueName === state.selectedQueue);
+        if (filteredWorkers.length === 0) {
+            dom.workersTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No hay workers para esta cola.</td></tr>';
+            return;
+        }
+        filteredWorkers.forEach(worker => {
+            const statusClass = worker.isPaused ? "paused" : worker.isRunning ? "running" : "stopped";
+            const statusText = worker.isPaused ? "Pausado" : worker.isRunning ? "Corriendo" : "Detenido";
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${worker.id}</td>
+                <td><span class="status-tag ${statusClass}">${statusText}</span></td>
+                <td>${worker.threadCount}</td>
+                <td>${worker.batchSize}</td>
+                <td>${worker.stats.totalCompleted}</td>
+                <td>${worker.stats.totalFailed + worker.stats.totalErrors}</td>
+                <td>
+                    <button class="btn btn-sm" data-action="start" data-worker-id="${worker.id}" ${worker.isRunning ? "disabled" : ""}>▶️ Iniciar</button>
+                    <button class="btn btn-sm" data-action="pause" data-worker-id="${worker.id}" ${!worker.isRunning || worker.isPaused ? "disabled" : ""}>⏸️ Pausar</button>
+                    <button class="btn btn-sm" data-action="resume" data-worker-id="${worker.id}" ${!worker.isPaused ? "disabled" : ""}>⏯️ Reanudar</button>
+                    <button class="btn btn-sm btn-danger" data-action="stop" data-worker-id="${worker.id}">⏹️ Detener</button>
+                </td>`;
+            dom.workersTableBody.appendChild(tr);
+        });
+    }
+
+    // MODIFICADO: renderTasks para hacer las filas clicleables
+    async function renderTasks(queueName, status) {
+        try {
+            dom.tasksPlaceholder.textContent = "Cargando tareas...";
+            const data = await apiCall(`/${queueName}/tasks?status=${status}&limit=100`);
+            dom.tasksTableBody.innerHTML = "";
+
+            if (data.tasks.length === 0) {
+                dom.tasksPlaceholder.textContent = `No hay tareas en estado '${status}'.`;
+                dom.tasksTableBody.style.display = "none";
+                dom.tasksPlaceholder.style.display = "block";
             } else {
-                dom.apiStatusLight.className = 'status-light disconnected';
-                dom.apiStatusText.textContent = 'Disconnected';
-            }
-        }
+                dom.tasksTableBody.style.display = "";
+                dom.tasksPlaceholder.style.display = "none";
+                data.tasks.forEach((task) => {
+                    const tr = document.createElement("tr");
+                    // AÑADIMOS data-task-id y estilos para que sea clicleable
+                    tr.dataset.taskId = task.id;
+                    tr.style.cursor = 'pointer';
+                    tr.title = 'Haz clic para ver detalles';
 
-        function renderQueues(queues) {
-            dom.queuesList.innerHTML = '';
-            if (Object.keys(queues).length === 0) {
-                dom.queuesList.innerHTML = '<li>No hay colas creadas.</li>';
-                return;
-            }
-            
-            for (const queueName in queues) {
-                const stats = queues[queueName];
-                const li = document.createElement('li');
-                li.dataset.queueName = queueName;
-                if (state.selectedQueue === queueName) {
-                    li.classList.add('active');
-                }
-                
-                li.innerHTML = `
-                    <span>${queueName}</span>
-                    <span class="queue-stats-summary">
-                        <span>⏳ ${stats.pending || 0}</span>
-                        <span>⚙️ ${stats.processing || 0}</span>
-                        <span>✅ ${stats.completed || 0}</span>
-                        <span>❌ ${stats.failed || 0}</span>
-                    </span>
-                `;
-                dom.queuesList.appendChild(li);
-            }
-        }
-        
-        function renderWorkers(workers) {
-             dom.workersTableBody.innerHTML = '';
-             const filteredWorkers = workers.filter(w => w.queueName === state.selectedQueue);
-
-             if(filteredWorkers.length === 0) {
-                 dom.workersTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No hay workers para esta cola.</td></tr>';
-                 return;
-             }
-
-             filteredWorkers.forEach(worker => {
-                 const statusClass = worker.isPaused ? 'paused' : (worker.isRunning ? 'running' : 'stopped');
-                 const statusText = worker.isPaused ? 'Pausado' : (worker.isRunning ? 'Corriendo' : 'Detenido');
-
-                 const tr = document.createElement('tr');
-                 tr.innerHTML = `
-                    <td>${worker.id}</td>
-                    <td><span class="status-tag ${statusClass}">${statusText}</span></td>
-                    <td>${worker.threadCount}</td>
-                    <td>${worker.processingTasks}</td>
-                    <td>${worker.stats.totalCompleted}</td>
-                    <td>${worker.stats.totalFailed + worker.stats.totalErrors}</td>
-                    <td>
-                        <button class="btn btn-sm" data-action="start" data-worker-id="${worker.id}" ${worker.isRunning ? 'disabled' : ''}>▶️ Iniciar</button>
-                        <button class="btn btn-sm" data-action="pause" data-worker-id="${worker.id}" ${!worker.isRunning || worker.isPaused ? 'disabled' : ''}>⏸️ Pausar</button>
-                        <button class="btn btn-sm" data-action="resume" data-worker-id="${worker.id}" ${!worker.isPaused ? 'disabled' : ''}>⏯️ Reanudar</button>
-                        <button class="btn btn-sm btn-danger" data-action="stop" data-worker-id="${worker.id}">⏹️ Detener</button>
-                    </td>
-                 `;
-                 dom.workersTableBody.appendChild(tr);
-             });
-        }
-        
-        async function renderTasks(queueName, status) {
-            try {
-                dom.tasksPlaceholder.textContent = 'Cargando tareas...';
-                const data = await apiCall(`/${queueName}/tasks?status=${status}&limit=100`);
-                dom.tasksTableBody.innerHTML = '';
-
-                if (data.tasks.length === 0) {
-                    dom.tasksPlaceholder.textContent = `No hay tareas en estado '${status}'.`;
-                    dom.tasksTableBody.style.display = 'none';
-                    dom.tasksPlaceholder.style.display = 'block';
-                } else {
-                    dom.tasksTableBody.style.display = '';
-                    dom.tasksPlaceholder.style.display = 'none';
-                    data.tasks.forEach(task => {
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td>${task.id}</td>
-                            <td><span class="status-tag ${task.status}">${task.status}</span></td>
-                            <td>${task.model}</td>
-                            <td>${task.operation}</td>
-                            <td>${new Date(task.createdAt).toLocaleString()}</td>
-                        `;
-                        dom.tasksTableBody.appendChild(tr);
-                    });
-                }
-            } catch (error) {
-                dom.tasksPlaceholder.textContent = `Error al cargar tareas: ${error.message}`;
-            }
-        }
-
-        function showQueueDetails(queueName) {
-            state.selectedQueue = queueName;
-            dom.placeholder.style.display = 'none';
-            dom.queueDetails.style.display = 'block';
-            dom.detailsTitle.textContent = `Workers de: ${queueName}`;
-            
-            // Actualizar clase activa en la lista
-            document.querySelectorAll('#queues-list li').forEach(li => {
-                li.classList.toggle('active', li.dataset.queueName === queueName);
-            });
-            
-            loadDashboardData(true); // Carga los datos sin refrescar todo, solo actualiza la vista
-        }
-
-        // --- LÓGICA PRINCIPAL ---
-        
-        async function loadDashboardData(isViewUpdate = false) {
-            if (!state.autoRefresh && !isViewUpdate) return;
-            
-            try {
-                const data = await apiCall('/dashboard');
-                updateApiStatus(true);
-                renderQueues(data.dashboard.queues);
-                
-                if (state.selectedQueue) {
-                    renderWorkers(data.dashboard.workers);
-                    renderTasks(state.selectedQueue, state.selectedTaskStatus);
-                } else {
-                    dom.placeholder.style.display = 'flex';
-                    dom.queueDetails.style.display = 'none';
-                }
-
-            } catch (error) {
-                // El estado de la API ya se actualiza en apiCall
-            }
-        }
-
-        function startPolling() {
-            if (state.pollingInterval) clearInterval(state.pollingInterval);
-            state.pollingInterval = setInterval(loadDashboardData, 5000);
-        }
-
-        function stopPolling() {
-            clearInterval(state.pollingInterval);
-            state.pollingInterval = null;
-        }
-
-        // --- MANEJADORES DE EVENTOS ---
-        
-        function handleQueueClick(e) {
-            const queueLi = e.target.closest('li');
-            if (queueLi && queueLi.dataset.queueName) {
-                showQueueDetails(queueLi.dataset.queueName);
-            }
-        }
-        
-        async function handleCreateQueue(e) {
-            e.preventDefault();
-            const queueName = dom.newQueueNameInput.value.trim();
-            if (!queueName) return;
-            
-            try {
-                await apiCall(`/${queueName}`, { method: 'POST' });
-                dom.newQueueNameInput.value = '';
-                loadDashboardData(true);
-            } catch (error) {
-                alert(`Error al crear la cola: ${error.message}`);
-            }
-        }
-
-        async function handleDeleteQueue() {
-            if (!state.selectedQueue) return;
-            if (confirm(`¿Estás seguro de que quieres eliminar la cola "${state.selectedQueue}" y todos sus workers y tareas?`)) {
-                try {
-                    await apiCall(`/${state.selectedQueue}`, { method: 'DELETE' });
-                    state.selectedQueue = null;
-                    loadDashboardData(true);
-                } catch (error) {
-                    alert(`Error al eliminar la cola: ${error.message}`);
-                }
-            }
-        }
-        
-        async function handleCreateWorker(e) {
-            e.preventDefault();
-            if (!state.selectedQueue) return;
-            
-            const threadCount = parseInt(dom.newWorkerThreadsInput.value);
-            try {
-                await apiCall(`/${state.selectedQueue}/workers`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ threadCount, autoStart: true })
+                    tr.innerHTML = `
+                        <td>${task.id}</td>
+                        <td><span class="status-tag ${task.status}">${task.status}</span></td>
+                        <td>${task.model}</td>
+                        <td>${task.operation}</td>
+                        <td>${task.threadId || "N/A"}</td>
+                        <td>${new Date(task.createdAt).toLocaleString()}</td>
+                    `;
+                    dom.tasksTableBody.appendChild(tr);
                 });
-                loadDashboardData(true);
-            } catch (error) {
-                alert(`Error al crear el worker: ${error.message}`);
             }
+        } catch (error) {
+            dom.tasksPlaceholder.textContent = `Error al cargar tareas: ${error.message}`;
         }
-        
-        async function handleWorkerAction(e) {
-            const button = e.target.closest('button[data-action]');
-            if (!button) return;
-            
-            const action = button.dataset.action;
-            const workerId = button.dataset.workerId;
-            
-            try {
-                switch(action) {
-                    case 'start':
-                        await apiCall(`/workers/${workerId}/start`, { method: 'POST' });
-                        break;
-                    case 'pause':
-                        await apiCall(`/workers/${workerId}/pause`, { method: 'POST' });
-                        break;
-                    case 'resume':
-                        await apiCall(`/workers/${workerId}/resume`, { method: 'POST' });
-                        break;
-                    case 'stop':
-                         if (confirm(`¿Estás seguro de que quieres detener (eliminar) el worker ${workerId}?`)) {
-                           await apiCall(`/workers/${workerId}`, { method: 'DELETE' });
-                         }
-                        break;
-                }
-                loadDashboardData(true);
-            } catch (error) {
-                alert(`Error en la acción '${action}': ${error.message}`);
-            }
-        }
-        
-        function handleTaskFilterClick(e) {
-            const button = e.target.closest('button[data-status]');
-            if (!button) return;
+    }
 
-            dom.taskFilters.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            
-            state.selectedTaskStatus = button.dataset.status;
+    function showTaskDetailsModal(task) {
+        if (!task) return;
+
+        const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleString() : 'N/A';
+
+        // Poblar datos básicos
+        document.getElementById('modal-task-id').textContent = task.id;
+        document.getElementById('modal-task-status').innerHTML = `<span class="status-tag ${task.status}">${task.status}</span>`;
+        document.getElementById('modal-task-model').textContent = task.model || 'N/A';
+        document.getElementById('modal-task-operation').textContent = task.operation || 'N/A';
+        document.getElementById('modal-task-worker').textContent = task.threadId || 'N/A';
+        document.getElementById('modal-task-created').textContent = formatDate(task.createdAt);
+        document.getElementById('modal-task-started').textContent = formatDate(task.startedAt);
+        document.getElementById('modal-task-completed').textContent = formatDate(task.completedAt);
+        
+        // Mostrar sección de error si existe
+        const errorSection = document.getElementById('modal-error-section');
+        if (task.error) {
+            errorSection.style.display = 'block';
+            errorSection.querySelector('pre').textContent = task.error;
+        } else {
+            errorSection.style.display = 'none';
+        }
+
+        // Mostrar sección de resultado si existe
+        const resultSection = document.getElementById('modal-result-section');
+        if (task.result) {
+            resultSection.style.display = 'block';
+            resultSection.querySelector('pre').textContent = JSON.stringify(task.result, null, 2);
+        } else {
+            resultSection.style.display = 'none';
+        }
+
+         // Mostrar sección de datos si existe
+        const dataSection = document.getElementById('modal-data-section');
+        if (task.data) {
+            dataSection.style.display = 'block';
+            dataSection.querySelector('pre').textContent = JSON.stringify(task.data, null, 2);
+        } else {
+            dataSection.style.display = 'none';
+        }
+
+        // Mostrar el modal
+        dom.taskDetailsModal.style.display = 'flex';
+    }
+
+    function showQueueDetails(queueName) {
+        state.selectedQueue = queueName;
+        dom.placeholder.style.display = "none";
+        dom.queueDetails.style.display = "block";
+        dom.detailsTitle.textContent = `Workers de: ${queueName}`;
+        document.querySelectorAll("#queues-list li").forEach(li => {
+            li.classList.toggle("active", li.dataset.queueName === queueName);
+        });
+        loadDashboardData(true);
+    }
+
+    // --- LÓGICA PRINCIPAL ---
+    async function loadDashboardData(isViewUpdate = false) {
+        if (!state.autoRefresh && !isViewUpdate) return;
+        try {
+            const data = await apiCall("/dashboard");
+            updateApiStatus(true);
+            renderQueues(data.dashboard.queues);
             if (state.selectedQueue) {
+                renderWorkers(data.dashboard.workers);
                 renderTasks(state.selectedQueue, state.selectedTaskStatus);
-            }
-        }
-        
-        function handleAutoRefreshToggle() {
-            state.autoRefresh = dom.autoRefreshToggle.checked;
-            if (state.autoRefresh) {
-                startPolling();
-                loadDashboardData(true);
             } else {
-                stopPolling();
+                dom.placeholder.style.display = "flex";
+                dom.queueDetails.style.display = "none";
+            }
+        } catch (error) {}
+    }
+
+    function startPolling() {
+        if (state.pollingInterval) clearInterval(state.pollingInterval);
+        state.pollingInterval = setInterval(loadDashboardData, 5000);
+    }
+
+    function stopPolling() {
+        clearInterval(state.pollingInterval);
+        state.pollingInterval = null;
+    }
+
+    // --- MANEJADORES DE EVENTOS ---
+    
+    // (handleCreateQueue, handleDeleteQueue, etc. sin cambios)
+    function handleQueueClick(e) {
+        const queueLi = e.target.closest("li");
+        if (queueLi && queueLi.dataset.queueName) {
+            showQueueDetails(queueLi.dataset.queueName);
+        }
+    }
+
+    async function handleCreateQueue(e) {
+        e.preventDefault();
+        const queueName = dom.newQueueNameInput.value.trim();
+        if (!queueName) return;
+        try {
+            await apiCall(`/${queueName}`, { method: "POST" });
+            dom.newQueueNameInput.value = "";
+            loadDashboardData(true);
+        } catch (error) {
+            alert(`Error al crear la cola: ${error.message}`);
+        }
+    }
+
+    async function handleDeleteQueue() {
+        if (!state.selectedQueue) return;
+        if (confirm(`¿Estás seguro de que quieres eliminar la cola "${state.selectedQueue}" y todos sus workers y tareas?`)) {
+            try {
+                await apiCall(`/${state.selectedQueue}`, { method: "DELETE" });
+                state.selectedQueue = null;
+                loadDashboardData(true);
+            } catch (error) {
+                alert(`Error al eliminar la cola: ${error.message}`);
             }
         }
+    }
 
-        // --- INICIALIZACIÓN ---
-        
-        function initializeApp() {
-            dom.queuesList.addEventListener('click', handleQueueClick);
-            dom.createQueueForm.addEventListener('submit', handleCreateQueue);
-            dom.deleteQueueBtn.addEventListener('click', handleDeleteQueue);
-            dom.createWorkerForm.addEventListener('submit', handleCreateWorker);
-            dom.workersTableBody.addEventListener('click', handleWorkerAction);
-            dom.taskFilters.addEventListener('click', handleTaskFilterClick);
-            dom.autoRefreshToggle.addEventListener('change', handleAutoRefreshToggle);
-
-            loadDashboardData();
-            startPolling();
+    async function handleCreateWorker(e) {
+        e.preventDefault();
+        if (!state.selectedQueue) return;
+        const threadCount = parseInt(dom.newWorkerThreadsInput.value);
+        const batchSize = parseInt(document.getElementById("new-worker-batch-size").value);
+        try {
+            await apiCall(`/${state.selectedQueue}/workers`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ threadCount, batchSize, autoStart: true, }),
+            });
+            loadDashboardData(true);
+        } catch (error) {
+            alert(`Error al crear el worker: ${error.message}`);
         }
+    }
 
-        document.addEventListener('DOMContentLoaded', initializeApp);
+    async function handleWorkerAction(e) {
+        const button = e.target.closest("button[data-action]");
+        if (!button) return;
+        const action = button.dataset.action;
+        const workerId = button.dataset.workerId;
+        try {
+            switch (action) {
+                case "start": await apiCall(`/workers/${workerId}/start`, { method: "POST" }); break;
+                case "pause": await apiCall(`/workers/${workerId}/pause`, { method: "POST" }); break;
+                case "resume": await apiCall(`/workers/${workerId}/resume`, { method: "POST" }); break;
+                case "stop":
+                    if (confirm(`¿Estás seguro de que quieres detener (eliminar) el worker ${workerId}?`)) {
+                        await apiCall(`/workers/${workerId}`, { method: "DELETE" });
+                    }
+                    break;
+            }
+            loadDashboardData(true);
+        } catch (error) {
+            alert(`Error en la acción '${action}': ${error.message}`);
+        }
+    }
 
-    </script>
-</body>
+    function handleTaskFilterClick(e) {
+        const button = e.target.closest("button[data-status]");
+        if (!button) return;
+        dom.taskFilters.querySelectorAll("button").forEach(btn => btn.classList.remove("active"));
+        button.classList.add("active");
+        state.selectedTaskStatus = button.dataset.status;
+        if (state.selectedQueue) {
+            renderTasks(state.selectedQueue, state.selectedTaskStatus);
+        }
+    }
+
+    // NUEVO: Manejador de clics en las filas de tareas
+    async function handleTaskRowClick(e) {
+        const row = e.target.closest('tr');
+        if (!row || !row.dataset.taskId) return;
+
+        const taskId = row.dataset.taskId;
+        const queueName = state.selectedQueue;
+
+        try {
+            const result = await apiCall(`/${queueName}/tasks/${taskId}`);
+            showTaskDetailsModal(result.task);
+        } catch (error) {
+            alert(`No se pudieron obtener los detalles de la tarea: ${error.message}`);
+        }
+    }
+
+    function handleAutoRefreshToggle() {
+        state.autoRefresh = dom.autoRefreshToggle.checked;
+        if (state.autoRefresh) {
+            startPolling();
+            loadDashboardData(true);
+        } else {
+            stopPolling();
+        }
+    }
+
+    // --- INICIALIZACIÓN ---
+    function initializeApp() {
+        dom.queuesList.addEventListener("click", handleQueueClick);
+        dom.createQueueForm.addEventListener("submit", handleCreateQueue);
+        dom.deleteQueueBtn.addEventListener("click", handleDeleteQueue);
+        dom.createWorkerForm.addEventListener("submit", handleCreateWorker);
+        dom.workersTableBody.addEventListener("click", handleWorkerAction);
+        dom.taskFilters.addEventListener("click", handleTaskFilterClick);
+        dom.autoRefreshToggle.addEventListener("change", handleAutoRefreshToggle);
+
+        // NUEVOS EVENT LISTENERS
+        dom.tasksTableBody.addEventListener('click', handleTaskRowClick);
+        dom.modalCloseBtn.addEventListener('click', () => { dom.taskDetailsModal.style.display = 'none'; });
+        dom.taskDetailsModal.addEventListener('click', (e) => { // Cierra el modal si se hace clic fuera del contenido
+            if (e.target === dom.taskDetailsModal) {
+                dom.taskDetailsModal.style.display = 'none';
+            }
+        });
+
+        loadDashboardData();
+        startPolling();
+    }
+
+    document.addEventListener("DOMContentLoaded", initializeApp);
+</script>
+  </body>
 </html>

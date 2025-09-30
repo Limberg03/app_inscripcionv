@@ -9,6 +9,7 @@ class QueueWorker extends EventEmitter {
     this.id = id;
     this.queue = queue;
     this.threadCount = threadCount;
+    this.batchSize = options.batchSize || 1; 
     this.workers = [];
     this.isRunning = false;
     this.isPaused = false;  // ✅ NUEVA FUNCIONALIDAD
@@ -50,6 +51,8 @@ class QueueWorker extends EventEmitter {
     for (let i = 0; i < this.threadCount; i++) {
       const worker = new Worker(path.join(__dirname, 'worker-thread.js'));
 
+
+        worker.workerId = `${this.id}_thread_${i}`;
       worker.on('message', async (message) => {
         await this.handleWorkerMessage(message);
       });
@@ -130,39 +133,48 @@ class QueueWorker extends EventEmitter {
     this.emit('worker:resumed', { workerId: this.id });
   }
 
-  async processLoop() {
-    while (this.isRunning) {
-      try {
-        // ✅ VERIFICAR SI ESTÁ PAUSADO
-        if (this.isPaused) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          continue;
-        }
+async processLoop() {
+  const BATCH_SIZE = this.options.batchSize || 5; // Configurable
+  
+  while (this.isRunning) {
+    try {
+      if (this.isPaused) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        continue;
+      }
 
-        if (this.processingTasks.size < this.threadCount) {
-          const task = await this.queue.dequeue();
+      const availableSlots = this.threadCount - this.processingTasks.size;
+      
+      if (availableSlots > 0) {
+        // NUEVO: Obtener lote de tareas
+        const batchSize = Math.min(availableSlots, BATCH_SIZE);
+        const tasks = await this.queue.dequeue(batchSize);
 
-          if (task) {
+        if (tasks && tasks.length > 0) {
+          console.log(`📦 Processing batch of ${tasks.length} tasks`);
+          
+          // Procesar cada tarea del lote
+          for (const task of tasks) {
             await this.processTask(task);
-          } else {
-            // No hay tareas disponibles, esperar un poco
-            await new Promise((resolve) => setTimeout(resolve, 1000));
           }
         } else {
-          // Todos los threads ocupados, esperar
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-      } catch (error) {
-        console.error('Error in process loop:', error);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
+    } catch (error) {
+      console.error('Error in process loop:', error);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
+}
 
   async processTask(task) {
     const availableWorker = this.workers.find(
       (w) => !this.processingTasks.has(w.threadId)
     );
+    task.threadId = availableWorker.threadId;
     
     if (!availableWorker) {
       // No hay worker disponible, devolver tarea a la cola
@@ -180,6 +192,7 @@ class QueueWorker extends EventEmitter {
       availableWorker.postMessage({
         type: 'process',
         task: task.serialize(),
+         threadId: availableWorker.threadId 
       });
     } catch (error) {
       console.error(`❌ Error sending task to worker:`, error);
@@ -199,7 +212,7 @@ class QueueWorker extends EventEmitter {
 
     switch (type) {
       case 'task:completed':
-        await this.queue.updateTaskStatus(taskId, 'completed', result);
+        await this.queue.updateTaskStatus(taskId, 'completed', result,null, threadId);
         this.stats.totalCompleted++;
         
         console.log(`✅ Task ${taskId} completed successfully`);
@@ -279,6 +292,7 @@ class QueueWorker extends EventEmitter {
       isRunning: this.isRunning,
       isPaused: this.isPaused,
       threadCount: this.threadCount,
+       batchSize: this.batchSize,
       processingTasks: this.processingTasks.size,
       stats: {
         ...this.stats,

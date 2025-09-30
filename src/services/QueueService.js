@@ -130,19 +130,29 @@ class QueueService {
     };
   }
 
-  async createWorker(queueName, threadCount = 1, options = {}) {
-    if (!this.initialized) await this.initialize();
-    
-    const { workerId, worker } = await this.queueManager.createWorker(queueName, threadCount, options);
-    return {
-      success: true,
-      workerId,
-      queueName,
-      threadCount,
-      message: 'Worker created successfully',
-      worker: worker
-    };
-  }
+  // MODIFICAR ESTE MÉTODO (línea ~130)
+async createWorker(queueName, threadCount = 1, options = {}) {
+  if (!this.initialized) await this.initialize();
+  
+  // NUEVO: Soporte para batchSize
+  const workerOptions = {
+    ...options,
+    batchSize: options.batchSize || 3 // Por defecto 3 tareas por lote
+  };
+  
+  const { workerId, worker } = await this.queueManager.createWorker(queueName, threadCount, workerOptions);
+ worker.batchSize = workerOptions.batchSize;
+
+  return {
+    success: true,
+    workerId,
+    queueName,
+    threadCount,
+    batchSize: workerOptions.batchSize, // Incluir en respuesta
+    message: 'Worker created successfully',
+    worker: worker
+  };
+}
 
   async stopWorker(workerId) {
     if (!this.initialized) await this.initialize();
@@ -224,22 +234,24 @@ class QueueService {
     };
   }
 
-  async getAllWorkers() {
-    if (!this.initialized) await this.initialize();
-    
-    const workers = [];
-    for (const [workerId, worker] of this.queueManager.workers.entries()) {
-      workers.push({
-        id: workerId,
-        ...worker.getStats()
-      });
-    }
-
-    return {
-      success: true,
-      workers
-    };
+ async getAllWorkers() {
+  if (!this.initialized) await this.initialize();
+  
+  const workers = [];
+  for (const [workerId, worker] of this.queueManager.workers.entries()) {
+    const stats = worker.getStats();
+    workers.push({
+      id: workerId,
+      batchSize: worker.batchSize || worker.options?.batchSize || 1, // AGREGAR ESTA LÍNEA
+      ...stats
+    });
   }
+
+  return {
+    success: true,
+    workers
+  };
+}
 
   async pauseQueueWorkers(queueName) {
     if (!this.initialized) await this.initialize();

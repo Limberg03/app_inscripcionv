@@ -10,55 +10,47 @@ parentPort.on('message', async (message) => {
     const { type, task } = message;
 
     if (type === 'process') {
-      try {
-        // Inicializar processor si no existe
-        if (!processor) {
-          console.log(`[Worker ${threadId}] Inicializando TaskProcessor...`);
-          processor = new TaskProcessor();
-          await processor.initialize();
-          console.log(`[Worker ${threadId}] TaskProcessor inicializado`);
-        }
+  try {
+    if (!processor) {
+      console.log(`[Worker ${threadId}] Inicializando TaskProcessor...`);
+      processor = new TaskProcessor();
+      await processor.initialize();
+      console.log(`[Worker ${threadId}] TaskProcessor inicializado`);
+    }
 
-        // CRÍTICO: Deserializar la tarea si viene como string
-        let taskObject;
-        if (typeof task === 'string') {
-          console.log(`[Worker ${threadId}] Tarea recibida como string, deserializando...`);
-          taskObject = JSON.parse(task);
-        } else {
-          taskObject = task;
-        }
+    // NUEVO: Soporte para lotes
+    const tasks = Array.isArray(task) ? task : [task];
+    const results = [];
+    
+    console.log(`[Worker ${threadId}] Procesando lote de ${tasks.length} tareas`);
 
-        console.log(`[Worker ${threadId}] Tarea deserializada:`, {
-          id: taskObject.id,
-          model: taskObject.model,
-          operation: taskObject.operation,
-          type: taskObject.type
-        });
+    for (const singleTask of tasks) {
+      let taskObject;
+      if (typeof singleTask === 'string') {
+        taskObject = JSON.parse(singleTask);
+      } else {
+        taskObject = singleTask;
+      }
 
-        // VALIDACIÓN: Verificar que taskObject tenga los datos necesarios
-        if (!taskObject) {
-          throw new Error('Task object is null or undefined after parsing');
-        }
+      if (!taskObject?.model || !taskObject?.operation) {
+        throw new Error(`Tarea incompleta - model: ${taskObject?.model}, operation: ${taskObject?.operation}`);
+      }
 
-        if (!taskObject.model || !taskObject.operation) {
-          console.error(`[Worker ${threadId}] Tarea incompleta después del parsing:`, taskObject);
-          throw new Error(`Tarea incompleta - model: ${taskObject.model}, operation: ${taskObject.operation}`);
-        }
+      const result = await processor.processTask(taskObject);
+      results.push({ taskId: taskObject.id, result });
+      
+      // Enviar cada resultado individualmente para mantener compatibilidad
+      parentPort.postMessage({
+        type: 'task:completed',
+        taskId: taskObject.id,
+        result,
+        threadId
+      });
+    }
 
-        console.log(`[Worker ${threadId}] ✅ Procesando tarea: ${taskObject.id} (${taskObject.model}.${taskObject.operation})`);
+    console.log(`[Worker ${threadId}] ✅ Lote de ${tasks.length} tareas completado`);
 
-        const result = await processor.processTask(taskObject);
-
-        console.log(`[Worker ${threadId}] ✅ Tarea completada exitosamente: ${taskObject.id}`);
-
-        parentPort.postMessage({
-          type: 'task:completed',
-          taskId: taskObject.id,
-          result,
-          threadId
-        });
-
-      } catch (error) {
+  } catch (error) {
         console.error(`[Worker ${threadId}] ❌ Error procesando tarea:`, error.message);
 
         // Intentar obtener taskId incluso si hay error
