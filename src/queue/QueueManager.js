@@ -358,14 +358,98 @@ async dequeue(batchSize = 1) {
       .substr(2, 9)}`;
   }
 
-  async destroy() {
-    // Clean up Redis keys
-    const keys = Object.values(this.keys);
-    if (keys.length > 0) {
-      await this.redis.del(...keys);
+ async destroy() {
+  console.log(`\n🗑️ ========== DESTROYING QUEUE '${this.name}' ==========`);
+  
+  try {
+    // Listar TODAS las claves antes de eliminar
+    const keysBeforePattern = `queue:${this.name}:*`;
+    const keysBefore = await this.redis.keys(keysBeforePattern);
+    console.log(`📋 Keys encontradas ANTES de eliminar (${keysBefore.length}):`, keysBefore);
+    
+    // Método 1: Eliminar usando las claves definidas
+    const definedKeys = [
+      this.keys.pending,
+      this.keys.processing,
+      this.keys.completed,
+      this.keys.failed,
+      this.keys.tasks,
+      this.keys.stats
+    ];
+    
+    console.log(`📝 Keys definidas a eliminar (${definedKeys.length}):`, definedKeys);
+    
+    // Eliminar una por una para ver cuál falla
+    for (const key of definedKeys) {
+      try {
+        const exists = await this.redis.exists(key);
+        if (exists) {
+          const deleted = await this.redis.del(key);
+          console.log(`   ${deleted ? '✅' : '❌'} Eliminando: ${key} (existed: ${exists})`);
+        } else {
+          console.log(`   ⏭️  Key no existe: ${key}`);
+        }
+      } catch (keyError) {
+        console.error(`   ❌ ERROR eliminando ${key}:`, keyError.message);
+      }
     }
+    
+    // Método 2: Buscar y eliminar CUALQUIER key relacionada con esta cola
+    const keysAfterDefined = await this.redis.keys(keysBeforePattern);
+    
+    if (keysAfterDefined.length > 0) {
+      console.log(`⚠️  Quedan ${keysAfterDefined.length} keys después de eliminar las definidas:`, keysAfterDefined);
+      console.log(`🔧 Eliminando keys restantes...`);
+      
+      if (keysAfterDefined.length > 0) {
+        const result = await this.redis.del(...keysAfterDefined);
+        console.log(`   Eliminadas ${result} keys adicionales`);
+      }
+    }
+    
+    // VERIFICACIÓN FINAL
+    const keysFinal = await this.redis.keys(keysBeforePattern);
+    
+    if (keysFinal.length === 0) {
+      console.log(`✅ ÉXITO: Todas las keys de '${this.name}' eliminadas de Redis`);
+    } else {
+      console.error(`❌ FALLO: Aún quedan ${keysFinal.length} keys en Redis:`, keysFinal);
+      
+      // Último intento: SCAN y DELETE
+      console.log(`🔧 Último intento con SCAN...`);
+      let cursor = '0';
+      let deletedByScan = 0;
+      
+      do {
+        const [newCursor, keys] = await this.redis.scan(
+          cursor, 
+          'MATCH', 
+          keysBeforePattern, 
+          'COUNT', 
+          100
+        );
+        cursor = newCursor;
+        
+        if (keys.length > 0) {
+          const deleted = await this.redis.del(...keys);
+          deletedByScan += deleted;
+          console.log(`   Eliminadas ${deleted} keys por SCAN`);
+        }
+      } while (cursor !== '0');
+      
+      console.log(`   Total eliminadas por SCAN: ${deletedByScan}`);
+    }
+    
+    // Limpiar listeners
     this.removeAllListeners();
+    
+    console.log(`========== QUEUE '${this.name}' DESTRUCTION COMPLETE ==========\n`);
+    
+  } catch (error) {
+    console.error(`❌ ERROR FATAL en destroy() de cola '${this.name}':`, error);
+    throw error;
   }
+} 
 }
 
 // Enhanced Queue Worker with Redis support
@@ -650,16 +734,117 @@ class QueueManager extends EventEmitter {
       enableReadyCheck: false,
       maxRetriesPerRequest: null,
     });
+
+      // ✅ NUEVO: Clave para almacenar configuración de workers
+    this.workersConfigKey = 'workers:config';
   }
+
+
+
+  async saveWorkerConfig(workerId, config) {
+  try {
+    const finalConfig = {
+      queueName: config.queueName,
+      threadCount: config.threadCount,
+      options: config.options || {},
+      isRunning: config.isRunning !== undefined ? config.isRunning : true,
+      isPaused: config.isPaused !== undefined ? config.isPaused : false,
+      createdAt: config.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await this.redis.hset(
+      this.workersConfigKey,
+      workerId,
+      JSON.stringify(finalConfig)
+    );
+    
+    console.log(`💾 Worker config saved: ${workerId}`, {
+      isRunning: finalConfig.isRunning,
+      isPaused: finalConfig.isPaused
+    });
+  } catch (error) {
+    console.error('❌ Error saving worker config:', error);
+    throw error;
+  }
+}
+
+  // ✅ NUEVO: Método para eliminar configuración de worker
+  async deleteWorkerConfig(workerId) {
+    try {
+      await this.redis.hdel(this.workersConfigKey, workerId);
+    } catch (error) {
+      console.error('Error deleting worker config:', error);
+    }
+  }
+
+  async loadPersistedWorkers() {
+  try {
+    const workersConfig = await this.redis.hgetall(this.workersConfigKey);
+    
+    if (!workersConfig || Object.keys(workersConfig).length === 0) {
+      console.log('📭 No persisted workers found');
+      return;
+    }
+
+    console.log(`📦 Loading ${Object.keys(workersConfig).length} persisted workers...`);
+
+    for (const [workerId, configStr] of Object.entries(workersConfig)) {
+      try {
+        const config = JSON.parse(configStr);
+        
+        // Verificar que la cola existe
+        const queue = await this.getQueue(config.queueName);
+        if (!queue) {
+          console.log(`⚠️ Queue '${config.queueName}' not found for worker '${workerId}', deleting config...`);
+          await this.deleteWorkerConfig(workerId);
+          continue;
+        }
+
+        // Recrear el worker SIN iniciarlo automáticamente
+        const worker = new QueueWorker(
+          workerId, 
+          queue, 
+          config.threadCount, 
+          config.options
+        );
+        
+        this.workers.set(workerId, worker);
+
+        // ✅ RESPETAR ESTADO PERSISTIDO
+        if (config.isRunning === true) {
+          await worker.start();
+          
+          // Si estaba pausado, aplicar pausa DESPUÉS de iniciar
+          if (config.isPaused === true) {
+            worker.pause();
+            console.log(`✅ Worker '${workerId}' restored → RUNNING + PAUSED`);
+          } else {
+            console.log(`✅ Worker '${workerId}' restored → RUNNING`);
+          }
+        } else {
+          console.log(`✅ Worker '${workerId}' restored → STOPPED`);
+        }
+
+      } catch (parseError) {
+        console.error(`❌ Error restoring worker '${workerId}':`, parseError);
+        await this.deleteWorkerConfig(workerId);
+      }
+    }
+    
+    console.log(`✅ ${this.workers.size} workers cargados desde Redis`);
+  } catch (error) {
+    console.error('❌ Error loading persisted workers:', error);
+  }
+}
 
   async initialize() {
     if (this.initialized) return;
 
-
     try {
       await this.redis.ping();
-
       await this.loadPersistedQueues();
+      await this.loadPersistedWorkers(); // ✅ NUEVO: Cargar workers
 
       this.initialized = true;
     } catch (error) {
@@ -669,29 +854,59 @@ class QueueManager extends EventEmitter {
   }
 
   async loadPersistedQueues() {
-    try {
-      const keys = await this.redis.keys('queue:*:stats');
-      const queueNames = keys.map(key => key.split(':')[1]);      
-
-      for (const queueName of queueNames) {
-        if (!this.queues.has(queueName)) {
-          
-          const queue = new RedisQueue(queueName, {
-            redis: this.redis,
-            maxRetries: this.maxRetries,
-            retryDelay: this.retryDelay,
-          });
-
-          await queue.initialize();
-          this.queues.set(queueName, queue);
-          
-        }
-      }
-    } catch (error) {
-      console.error("Error loading persisted queues:", error);
-      throw error;
+  try {
+    const statsKeys = await this.redis.keys('queue:*:stats');
+    
+    if (statsKeys.length === 0) {
+      console.log('📭 No persisted queues found');
+      return;
     }
+    
+    const queueNames = statsKeys.map(key => {
+      const match = key.match(/^queue:([^:]+):stats$/);
+      return match ? match[1] : null;
+    }).filter(Boolean);
+    
+    console.log(`📦 Found ${queueNames.length} persisted queues: ${queueNames.join(', ')}`);
+
+    for (const queueName of queueNames) {
+      if (this.queues.has(queueName)) {
+        console.log(`   ℹ️  Cola '${queueName}' ya existe en memoria`);
+        continue;
+      }
+      
+      // SIMPLIFICADO: Solo verificar que exista la key stats
+      const statsExist = await this.redis.exists(`queue:${queueName}:stats`);
+      
+      if (!statsExist) {
+        console.log(`⚠️  Cola '${queueName}' sin stats en Redis, limpiando...`);
+        const orphanKeys = await this.redis.keys(`queue:${queueName}:*`);
+        if (orphanKeys.length > 0) {
+          await this.redis.del(...orphanKeys);
+          console.log(`   🗑️  Eliminadas ${orphanKeys.length} keys huérfanas`);
+        }
+        continue;
+      }
+      
+      // Recrear cola válida
+      const queue = new RedisQueue(queueName, {
+        redis: this.redis,
+        maxRetries: this.maxRetries,
+        retryDelay: this.retryDelay,
+      });
+
+      await queue.initialize();
+      this.queues.set(queueName, queue);
+      
+      console.log(`✅ Cola '${queueName}' cargada desde Redis`);
+    }
+    
+    console.log(`✅ Total de colas cargadas: ${this.queues.size}`);
+  } catch (error) {
+    console.error("❌ Error loading persisted queues:", error);
+    throw error;
   }
+}
 
   async createQueue(queueName, options = {}) {
     if (!this.initialized) {
@@ -721,52 +936,109 @@ class QueueManager extends EventEmitter {
     return this.queues.get(queueName);
   }
 
-  async deleteQueue(queueName) {
-    const queue = this.queues.get(queueName);
-    if (queue) {
-      await queue.destroy();
-      this.queues.delete(queueName);
-      
-      // Stop all workers for this queue
-      const workersForQueue = Array.from(this.workers.entries()).filter(
-        ([_, worker]) => worker.queue.name === queueName
-      );
-
-      for (const [workerId, worker] of workersForQueue) {
-        await worker.stop();
-        this.workers.delete(workerId);
-      }
-      console.log(`✅ Queue '${queueName}' deleted`);
+ async deleteQueue(queueName) {
+  console.log(`🗑️ Iniciando eliminación de cola '${queueName}'...`);
+  
+  const queue = this.queues.get(queueName);
+  
+  // PRIMERO: Detener y eliminar workers de esta cola
+  const workersToDelete = [];
+  for (const [workerId, worker] of this.workers.entries()) {
+    if (worker.queue.name === queueName) {
+      workersToDelete.push(workerId);
     }
   }
-
-  async createWorker(queueName, threadCount = 1, options = {}) {
-    const queue = await this.getQueue(queueName);
-    if (!queue) {
-      throw new Error(`Queue '${queueName}' not found`);
+ 
+  console.log(`   Encontrados ${workersToDelete.length} workers para eliminar`);
+  
+  for (const workerId of workersToDelete) {
+    const worker = this.workers.get(workerId);
+    if (worker && worker.isRunning) {
+      await worker.stop(false); // Stop sin graceful para ser más rápido
     }
-//a
-    const workerId = `${queueName}_worker_${Date.now()}`;
-    const worker = new QueueWorker(workerId, queue, threadCount, options);
-
-    this.workers.set(workerId, worker);
-
-    worker.batchSize = options.batchSize || 1;
-    
-    if (options.autoStart !== false) {
-      await worker.start();
+    this.workers.delete(workerId);
+    await this.deleteWorkerConfig(workerId);
+    console.log(`   🗑️ Worker '${workerId}' eliminado`);
+  }
+  
+  // SEGUNDO: Destruir la cola (esto limpia Redis)
+  if (queue) {
+    await queue.destroy();
+  } else {
+    console.log(`⚠️ Cola '${queueName}' no encontrada en memoria, limpiando Redis directamente...`);
+    // Limpiar Redis aunque no exista en memoria
+    const keysToDelete = await this.redis.keys(`queue:${queueName}:*`);
+    if (keysToDelete.length > 0) {
+      await this.redis.del(...keysToDelete);
+      console.log(`   Eliminadas ${keysToDelete.length} keys huérfanas de Redis`);
     }
+  }
+  
+  // TERCERO: Eliminar de memoria
+  this.queues.delete(queueName);
+  
+  // VERIFICACIÓN FINAL
+  const remainingKeys = await this.redis.keys(`queue:${queueName}:*`);
+  const remainingWorkers = workersToDelete.filter(wId => this.workers.has(wId));
+  
+  console.log(`✅ Cola '${queueName}' eliminada:`);
+  console.log(`   - Workers eliminados: ${workersToDelete.length}`);
+  console.log(`   - Keys restantes en Redis: ${remainingKeys.length}`);
+  console.log(`   - Workers restantes en memoria: ${remainingWorkers.length}`);
+  
+  if (remainingKeys.length > 0) {
+    console.error(`❌ ERROR: Aún hay ${remainingKeys.length} keys en Redis:`, remainingKeys);
+  }
+}
 
-    console.log(`✅ Worker '${workerId}' created with ${threadCount} threads`);
-    return { workerId, worker };
+async createWorker(queueName, threadCount = 1, options = {}) {
+  const queue = await this.getQueue(queueName);
+  if (!queue) {
+    throw new Error(`Queue '${queueName}' not found`);
   }
 
-  async stopWorker(workerId) {
+  const workerId = `${queueName}_worker_${Date.now()}`;
+  const worker = new QueueWorker(workerId, queue, threadCount, options);
+
+  this.workers.set(workerId, worker);
+  worker.batchSize = options.batchSize || 1;
+  
+  // ✅ Guardar estado inicial en Redis
+  const initialState = {
+    queueName,
+    threadCount,
+    options,
+    isRunning: options.autoStart !== false, // true por defecto
+    isPaused: false,
+    createdAt: new Date().toISOString()
+  };
+  
+  await this.saveWorkerConfig(workerId, initialState);
+  
+  // Auto-iniciar si corresponde
+  if (options.autoStart !== false) {
+    await worker.start();
+  }
+
+  console.log(`✅ Worker '${workerId}' created with initial state:`, {
+    isRunning: initialState.isRunning,
+    isPaused: initialState.isPaused
+  });
+  
+  return { workerId, worker };
+}
+
+
+   async stopWorker(workerId) {
     const worker = this.workers.get(workerId);
     if (worker) {
       await worker.stop();
       this.workers.delete(workerId);
-      console.log(`✅ Worker '${workerId}' stopped`);
+      
+      // ✅ NUEVO: Eliminar configuración de Redis
+      await this.deleteWorkerConfig(workerId);
+      
+      console.log(`✅ Worker '${workerId}' stopped and removed from persistence`);
     }
   }
 
@@ -799,11 +1071,17 @@ class QueueManager extends EventEmitter {
     return stats;
   }
 
-  async shutdown() {
+ async shutdown() {
+    // Detener workers PERO mantener su configuración
     const workerPromises = Array.from(this.workers.values()).map((worker) =>
       worker.stop()
     );
     await Promise.all(workerPromises);
+    
+    // ✅ MODIFICADO: NO eliminar configuración de workers en shutdown
+    // Solo limpiar la memoria
+    this.workers.clear();
+    
     const queuePromises = Array.from(this.queues.values()).map((queue) =>
       queue.destroy()
     );
@@ -811,8 +1089,7 @@ class QueueManager extends EventEmitter {
     await this.redis.quit();
 
     this.queues.clear();
-    this.workers.clear();
-
+    console.log('✅ Shutdown complete - worker configs preserved');
   }
 }
 

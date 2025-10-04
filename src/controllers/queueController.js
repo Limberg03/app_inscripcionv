@@ -235,6 +235,122 @@ const queueController = {
     }
   },
 
+universalUpdateAutoBalance: async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation errors",
+        errors: errors.array(),
+      });
+    }
+
+    const { model, id } = req.params;
+    const { data, options = {} } = req.body;
+
+    console.log("🔄 Universal Update (Auto-Balance):");
+    console.log("  model:", model);
+    console.log("  id:", id);
+    console.log("  data:", JSON.stringify(data, null, 2));
+
+    const service = getQueueService();
+    const result = await service.updateRecordAutoBalance(
+      model, 
+      parseInt(id), 
+      data, 
+      options
+    );
+
+    console.log(`✅ Update encolado con balanceo en: ${result.queueName}`);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in universalUpdateAutoBalance:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating record with auto-balance",
+      error: error.message,
+    });
+  }
+},
+
+// ✅ DELETE con auto-balance
+universalDeleteAutoBalance: async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation errors",
+        errors: errors.array(),
+      });
+    }
+
+    const { model, id } = req.params;
+    const { options = {} } = req.body;
+
+    console.log("🔄 Universal Delete (Auto-Balance):");
+    console.log("  model:", model);
+    console.log("  id:", id);
+
+    const service = getQueueService();
+    const result = await service.deleteRecordAutoBalance(
+      model, 
+      parseInt(id), 
+      options
+    );
+
+    console.log(`✅ Delete encolado con balanceo en: ${result.queueName}`);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in universalDeleteAutoBalance:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error deleting record with auto-balance",
+      error: error.message,
+    });
+  }
+},
+
+
+// ✅ NUEVO: Universal save CON balanceo automático
+  universalSaveAutoBalance: async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation errors",
+          errors: errors.array(),
+        });
+      }
+
+      const { model } = req.params;
+      const { data, options = {} } = req.body;
+
+      console.log("🔄 Universal Save (Auto-Balance) - Parámetros:");
+      console.log("  model:", model);
+      console.log("  data:", JSON.stringify(data, null, 2));
+
+      const service = getQueueService();
+      const result = await service.saveRecordAutoBalance(model, data, options);
+
+      console.log(`✅ Tarea encolada con balanceo en: ${result.queueName}`);
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error in universalSaveAutoBalance:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error saving record with auto-balance",
+        error: error.message,
+      });
+    }
+  },
+
+
   createQueue: async (req, res) => {
     try {
       const { queueName } = req.params;
@@ -324,6 +440,53 @@ const queueController = {
         success: false,
         message: "Error stopping worker",
         error: error.message,
+      });
+    }
+  },
+
+
+  deleteWorkerPermanently: async (req, res) => {
+    try {
+      const { workerId } = req.params;
+      
+      const service = getQueueService();
+      const result = await service.deleteWorkerPermanently(workerId);
+      
+      res.status(200).json(result);
+    } catch (error) {
+      console.error('Error deleting worker permanently:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting worker',
+        error: error.message
+      });
+    }
+  },
+
+  getPersistedWorkers: async (req, res) => {
+    try {
+      const service = getQueueService();
+      await service.initialize();
+      
+      const workersConfig = await service.queueManager.redis.hgetall(
+        service.queueManager.workersConfigKey
+      );
+      
+      const workers = Object.entries(workersConfig || {}).map(([id, config]) => ({
+        id,
+        ...JSON.parse(config)
+      }));
+      
+      res.status(200).json({
+        success: true,
+        workers,
+        total: workers.length
+      });
+    } catch (error) {
+      console.error('Error getting persisted workers:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
       });
     }
   },

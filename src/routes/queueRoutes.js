@@ -148,7 +148,7 @@ router.delete('/:queueName',
       });
     }
   }
-);
+); 
 
 // Get queue stats
 router.get('/:queueName/stats',
@@ -384,12 +384,12 @@ router.delete('/workers/:workerId',
   async (req, res) => {
     try {
       const { workerId } = req.params;
-      const result = await queueService.stopWorker(workerId);
+      const result = await queueService.deleteWorker(workerId); // ✅ CAMBIADO
       res.json(result);
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Failed to stop worker',
+        message: 'Failed to delete worker', // ✅ CAMBIADO
         error: error.message
       });
     }
@@ -456,6 +456,61 @@ router.post('/:queueName/workers/resume',
   }
 );
 
+router.delete('/workers',
+  ensureInitialized,
+  async (req, res) => {
+    try {
+      const { graceful = 'true' } = req.query;
+      const result = await queueService.deleteAllWorkers(graceful === 'true');
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete all workers',
+        error: error.message
+      });
+    }
+  }
+);
+
+// Delete workers of specific queue
+router.delete('/:queueName/workers',
+  [param('queueName').isString().isLength({ min: 1 }).withMessage('Queue name is required')],
+  handleValidationErrors,
+  ensureInitialized,
+  async (req, res) => {
+    try {
+      const { queueName } = req.params;
+      const { graceful = 'true' } = req.query;
+      const result = await queueService.deleteQueueWorkers(queueName, graceful === 'true');
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete queue workers',
+        error: error.message
+      });
+    }
+  }
+);
+
+// Clean all system (queues + workers)
+router.delete('/system/clean-all',
+  ensureInitialized,
+  async (req, res) => {
+    try {
+      const result = await queueService.deleteAllQueuesAndWorkers();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to clean system',
+        error: error.message
+      });
+    }
+  }
+);
+
 // ================ TASK OPERATIONS ================
 
 // Enqueue generic task
@@ -485,7 +540,39 @@ router.post('/:queueName/tasks',
   }
 );
 
+
+
 // RUTA UNIVERSAL PARA CUALQUIER MODELO
+
+router.post('/:model/save', 
+  [
+    param('model').isString().isLength({ min: 1 }).withMessage('Model name is required'),
+    body('data').exists().withMessage('Data is required')
+  ],
+  queueController.universalSaveAutoBalance
+);
+
+// Update con auto-balance
+router.put('/:model/:id', 
+  [
+    param('model').isString().isLength({ min: 1 }),
+    param('id').isInt({ min: 1 }),
+    body('data').exists()
+  ],
+  queueController.universalUpdateAutoBalance
+);
+
+// Delete con auto-balance
+router.delete('/:model/:id',
+  [
+    param('model').isString().isLength({ min: 1 }),
+    param('id').isInt({ min: 1 })
+  ],
+  queueController.universalDeleteAutoBalance
+);
+
+//-------------------
+
 router.post('/:queueName/:model/save', 
   [
     param('queueName').isString().isLength({ min: 1 }).withMessage('Queue name is required'),
