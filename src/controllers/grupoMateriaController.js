@@ -17,9 +17,14 @@ const grupoMateriaController = {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 10;
       const offset = (page - 1) * limit;
-      const { estado, materiaId, docenteId, horarioId } = req.query;
+      const { cupo, estado, materiaId, docenteId, horarioId } = req.query;
 
       const where = {};
+
+      if (cupo) {
+        where.cupo = cupo;
+      }
+
       if (estado !== undefined) {
         where.estado = estado === "true";
       }
@@ -176,7 +181,7 @@ const grupoMateriaController = {
         });
       }
 
-      const { grupo, estado, materiaId, docenteId } = req.body;
+      const { cupo, grupo, estado, materiaId, docenteId } = req.body;
 
       // Verificar que la materia existe
       const materia = await Materia.findByPk(materiaId);
@@ -197,6 +202,7 @@ const grupoMateriaController = {
       }
 
       const grupoMateria = await GrupoMateria.create({
+        cupo,
         grupo,
         estado: estado !== undefined ? estado : true,
         materiaId,
@@ -275,7 +281,7 @@ const grupoMateriaController = {
       }
 
       const { id } = req.params;
-      const { grupo, estado, materiaId, docenteId } = req.body;
+      const { cupo, grupo, estado, materiaId, docenteId } = req.body;
 
       const grupoMateria = await GrupoMateria.findByPk(id);
       if (!grupoMateria) {
@@ -308,6 +314,7 @@ const grupoMateriaController = {
       }
 
       await grupoMateria.update({
+        cupo,
         grupo,
         estado,
         materiaId,
