@@ -48,6 +48,15 @@ const GrupoMateria = sequelize.define('GrupoMateria', {
       key: 'id'
     }
   },    
+
+  cupo: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+
   
 }, {
   tableName: 'grupos_materia',
