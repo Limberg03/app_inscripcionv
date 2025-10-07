@@ -316,16 +316,47 @@
         <div class="status-indicator">
           <div class="loader" id="loader"></div>
           <div class="toggle-switch">
-            <span>Auto-refresh</span>
-            <input type="checkbox" id="auto-refresh-toggle" checked />
-            <label for="auto-refresh-toggle"></label>
-          </div>
-          <span>API Status:</span>
+  <span>Auto-refresh</span>
+  <input type="checkbox" id="auto-refresh-toggle" checked />
+  <label for="auto-refresh-toggle"></label>
+</div>
+<button class="btn btn-danger btn-sm" id="clean-system-btn" style="margin-left: 15px;">
+  🗑️ Limpiar Todo
+</button>
+<span>API Status:</span>
           <div id="api-status-light" class="status-light disconnected"></div>
           <span id="api-status-text">Disconnected</span>
         </div>
       </header>
 
+
+<div class="panel" style="margin-bottom: 20px;">
+  <h2>📊 Estadísticas Globales del Sistema</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+    <div style="text-align: center; padding: 15px; background-color: #333; border-radius: 8px;">
+      <div style="font-size: 2em; color: var(--blue);" id="global-pending">0</div>
+      <div style="color: var(--text-muted); font-size: 0.9em;">Pendientes</div>
+    </div>
+    <div style="text-align: center; padding: 15px; background-color: #333; border-radius: 8px;">
+      <div style="font-size: 2em; color: var(--accent-color);" id="global-processing">0</div>
+      <div style="color: var(--text-muted); font-size: 0.9em;">Procesando</div>
+    </div>
+    <div style="text-align: center; padding: 15px; background-color: #333; border-radius: 8px;">
+      <div style="font-size: 2em; color: var(--green);" id="global-completed">0</div>
+      <div style="color: var(--text-muted); font-size: 0.9em;">Completadas</div>
+    </div>
+    <div style="text-align: center; padding: 15px; background-color: #333; border-radius: 8px;">
+      <div style="font-size: 2em; color: var(--red);" id="global-failed">0</div>
+      <div style="color: var(--text-muted); font-size: 0.9em;">Fallidas/Error</div>
+    </div>
+    <div style="text-align: center; padding: 15px; background-color: #333; border-radius: 8px;">
+      <div style="font-size: 2em; color: var(--yellow);" id="global-total">0</div>
+      <div style="color: var(--text-muted); font-size: 0.9em;">Total Procesado</div>
+    </div>
+  </div>
+</div>
+
+      
       <main class="dashboard-grid">
         <div class="panel" id="queues-panel">
           <section class="section">
@@ -350,37 +381,49 @@
           <div id="placeholder">Selecciona una cola para ver los detalles.</div>
           <div id="queue-details" style="display: none">
             <section class="section" id="workers-section">
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                "
-              >
-                <h2 id="details-title">Workers</h2>
-                <button class="btn btn-danger btn-sm" id="delete-queue-btn">
-                  Eliminar Cola
-                </button>
-              </div>
-              <div
-                id="batch-stats"
-                style="
-                  display: flex;
-                  gap: 15px;
-                  margin-bottom: 15px;
-                  font-size: 0.9em;
-                "
-              ></div>
-              <table id="workers-table">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+  <h2 id="details-title">Workers</h2>
+  <div style="display: flex; gap: 10px;">
+    <button class="btn btn-danger btn-sm" id="delete-all-workers-btn">
+      Eliminar Todos Workers
+    </button>
+    <button class="btn btn-danger btn-sm" id="delete-queue-btn">
+      Eliminar Cola
+    </button>
+  </div>
+</div>
+              <div id="queue-detail-stats" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px; padding: 15px; background-color: #333; border-radius: 8px;">
+  <div style="text-align: center;">
+    <div style="font-size: 1.5em; color: var(--blue);" id="queue-pending">0</div>
+    <div style="font-size: 0.8em; color: var(--text-muted);">Pendientes</div>
+  </div>
+  <div style="text-align: center;">
+    <div style="font-size: 1.5em; color: var(--accent-color);" id="queue-processing">0</div>
+    <div style="font-size: 0.8em; color: var(--text-muted);">Procesando</div>
+  </div>
+  <div style="text-align: center;">
+    <div style="font-size: 1.5em; color: var(--green);" id="queue-completed">0</div>
+    <div style="font-size: 0.8em; color: var(--text-muted);">Completadas</div>
+  </div>
+  <div style="text-align: center;">
+    <div style="font-size: 1.5em; color: var(--red);" id="queue-failed">0</div>
+    <div style="font-size: 0.8em; color: var(--text-muted);">Fallidas/Error</div>
+  </div>
+  <div style="text-align: center;">
+    <div style="font-size: 1.5em; color: var(--yellow);" id="queue-total-processed">0</div>
+    <div style="font-size: 0.8em; color: var(--text-muted);">Total Procesado</div>
+  </div>
+</div>
+<table id="workers-table">
                 <thead>
                   <tr>
                     <th>ID</th>
                     <th>Estado</th>
                     <th>Hilos</th>
-                    <th>Lote</th>
-                    <!-- <th>Procesando</th> -->
+                    <!-- <th>Lote</th>
+                     <th>Procesando</th>
                     <th>Completados</th>
-                    <th>Fallidos</th>
+                    <th>Fallidos</th> -->
                     <th>Acciones</th>
                   </tr>
                 </thead>
@@ -644,17 +687,46 @@
             if (state.selectedQueue === queueName) {
                 li.classList.add("active");
             }
-            li.innerHTML = `
-                <span>${queueName}</span>
-                <span class="queue-stats-summary">
-                    <span>⏳ ${stats.pending || 0}</span>
-                    <span>⚙️ ${stats.processing || 0}</span>
-                    <span>✅ ${stats.completed || 0}</span>
-                    <span>❌ ${stats.failed || 0}</span>
-                </span>`;
+           const totalProcessed = (stats.completed || 0) + (stats.failed || 0) + (stats.error || 0);
+li.innerHTML = `
+    <div>
+        <div style="font-weight: bold;">${queueName}</div>
+        <div style="font-size: 0.8em; color: var(--text-muted);">Total procesado: ${totalProcessed}</div>
+    </div>
+    <span class="queue-stats-summary">
+        <span>⏳ ${stats.pending || 0}</span>
+        <span>⚙️ ${stats.processing || 0}</span>
+        <span>✅ ${stats.completed || 0}</span>
+        <span>❌ ${(stats.failed || 0) + (stats.error || 0)}</span>
+    </span>`;
             dom.queuesList.appendChild(li);
         }
     }
+
+
+    function renderGlobalStats(queues) {
+    let totalPending = 0;
+    let totalProcessing = 0;
+    let totalCompleted = 0;
+    let totalFailed = 0;
+    
+    for (const queueName in queues) {
+        const stats = queues[queueName];
+        totalPending += stats.pending || 0;
+        totalProcessing += stats.processing || 0;
+        totalCompleted += stats.completed || 0;
+        totalFailed += (stats.failed || 0) + (stats.error || 0);
+    }
+    
+    const totalProcessed = totalCompleted + totalFailed;
+    
+    document.getElementById('global-pending').textContent = totalPending;
+    document.getElementById('global-processing').textContent = totalProcessing;
+    document.getElementById('global-completed').textContent = totalCompleted;
+    document.getElementById('global-failed').textContent = totalFailed;
+    document.getElementById('global-total').textContent = totalProcessed;
+}
+
 
     function renderWorkers(workers) {
         dom.workersTableBody.innerHTML = "";
@@ -671,14 +743,14 @@
                 <td>${worker.id}</td>
                 <td><span class="status-tag ${statusClass}">${statusText}</span></td>
                 <td>${worker.threadCount}</td>
-                <td>${worker.batchSize}</td>
+                <!-- <td>${worker.batchSize}</td>
                 <td>${worker.stats.totalCompleted}</td>
-                <td>${worker.stats.totalFailed + worker.stats.totalErrors}</td>
+                <td>${worker.stats.totalFailed + worker.stats.totalErrors}</td> -->
                 <td>
                     <button class="btn btn-sm" data-action="start" data-worker-id="${worker.id}" ${worker.isRunning ? "disabled" : ""}>▶️ Iniciar</button>
                     <button class="btn btn-sm" data-action="pause" data-worker-id="${worker.id}" ${!worker.isRunning || worker.isPaused ? "disabled" : ""}>⏸️ Pausar</button>
                     <button class="btn btn-sm" data-action="resume" data-worker-id="${worker.id}" ${!worker.isPaused ? "disabled" : ""}>⏯️ Reanudar</button>
-                    <button class="btn btn-sm btn-danger" data-action="stop" data-worker-id="${worker.id}">⏹️ Detener</button>
+                    <button class="btn btn-sm btn-danger" data-action="stop" data-worker-id="${worker.id}">⏹️ Eliminar </button>
                 </td>`;
             dom.workersTableBody.appendChild(tr);
         });
@@ -772,6 +844,19 @@
         dom.placeholder.style.display = "none";
         dom.queueDetails.style.display = "block";
         dom.detailsTitle.textContent = `Workers de: ${queueName}`;
+
+        // Actualizar estadísticas de la cola seleccionada
+apiCall("/dashboard").then(data => {
+    const queueStats = data.dashboard.queues[queueName];
+    if (queueStats) {
+        document.getElementById('queue-pending').textContent = queueStats.pending || 0;
+        document.getElementById('queue-processing').textContent = queueStats.processing || 0;
+        document.getElementById('queue-completed').textContent = queueStats.completed || 0;
+        document.getElementById('queue-failed').textContent = (queueStats.failed || 0) + (queueStats.error || 0);
+        document.getElementById('queue-total-processed').textContent = (queueStats.completed || 0) + (queueStats.failed || 0) + (queueStats.error || 0);
+    }
+});
+
         document.querySelectorAll("#queues-list li").forEach(li => {
             li.classList.toggle("active", li.dataset.queueName === queueName);
         });
@@ -785,6 +870,7 @@
             const data = await apiCall("/dashboard");
             updateApiStatus(true);
             renderQueues(data.dashboard.queues);
+            renderGlobalStats(data.dashboard.queues);
             if (state.selectedQueue) {
                 renderWorkers(data.dashboard.workers);
                 renderTasks(state.selectedQueue, state.selectedTaskStatus);
@@ -840,6 +926,32 @@
             }
         }
     }
+
+async function handleDeleteAllWorkers() {
+    if (!state.selectedQueue) return;
+    if (confirm(`¿Eliminar TODOS los workers de "${state.selectedQueue}"?`)) {
+        try {
+            await apiCall(`/${state.selectedQueue}/workers`, { method: "DELETE" });
+            loadDashboardData(true);
+        } catch (error) {
+            alert(`Error al eliminar workers: ${error.message}`);
+        }
+    }
+}
+
+async function handleCleanSystem() {
+    if (confirm("⚠️ ADVERTENCIA: Esto eliminará TODAS las colas, workers y tareas. ¿Continuar?")) {
+        try {
+            await apiCall("/system/clean-all", { method: "DELETE" });
+            state.selectedQueue = null;
+            loadDashboardData(true);
+            alert("Sistema limpiado completamente");
+        } catch (error) {
+            alert(`Error al limpiar sistema: ${error.message}`);
+        }
+    }
+}
+
 
     async function handleCreateWorker(e) {
         e.preventDefault();
@@ -921,16 +1033,20 @@
     function initializeApp() {
         dom.queuesList.addEventListener("click", handleQueueClick);
         dom.createQueueForm.addEventListener("submit", handleCreateQueue);
-        dom.deleteQueueBtn.addEventListener("click", handleDeleteQueue);
-        dom.createWorkerForm.addEventListener("submit", handleCreateWorker);
+dom.deleteQueueBtn.addEventListener("click", handleDeleteQueue);
+document.getElementById("delete-all-workers-btn").addEventListener("click", handleDeleteAllWorkers);
+dom.createWorkerForm.addEventListener("submit", handleCreateWorker);
         dom.workersTableBody.addEventListener("click", handleWorkerAction);
         dom.taskFilters.addEventListener("click", handleTaskFilterClick);
         dom.autoRefreshToggle.addEventListener("change", handleAutoRefreshToggle);
 
         // NUEVOS EVENT LISTENERS
         dom.tasksTableBody.addEventListener('click', handleTaskRowClick);
-        dom.modalCloseBtn.addEventListener('click', () => { dom.taskDetailsModal.style.display = 'none'; });
-        dom.taskDetailsModal.addEventListener('click', (e) => { // Cierra el modal si se hace clic fuera del contenido
+        dom.modalCloseBtn.addEventListener('click', () => { 
+    dom.taskDetailsModal.style.display = 'none'; 
+});
+document.getElementById("clean-system-btn").addEventListener("click", handleCleanSystem);
+dom.taskDetailsModal.addEventListener('click', (e) => {
             if (e.target === dom.taskDetailsModal) {
                 dom.taskDetailsModal.style.display = 'none';
             }
