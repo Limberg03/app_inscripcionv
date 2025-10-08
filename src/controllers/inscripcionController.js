@@ -1,7 +1,118 @@
 const { Inscripcion, Estudiante, GrupoMateria, Materia, Docente, PlanEstudio, Nivel, Prerequisito } = require('../models');
 const { validationResult } = require('express-validator');
+const QueueService = require("../services/QueueService");
+
+let queueServiceInstance = null;
+
+const getQueueService = () => {
+  if (!queueServiceInstance) {
+    queueServiceInstance = new QueueService();
+  }
+  return queueServiceInstance;
+};
 
 const inscripcionController = {
+
+
+requestSeat: async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation errors",
+          errors: errors.array(),
+        });
+      }
+
+      const { estudianteId, grupoMateriaId, gestion } = req.body;
+
+      console.log("🎓 Solicitud de inscripción:");
+      console.log("  Estudiante ID:", estudianteId);
+      console.log("  Grupo Materia ID:", grupoMateriaId);
+      console.log("  Gestión:", gestion);
+
+      const grupo = await GrupoMateria.findByPk(grupoMateriaId);
+      
+      if (!grupo) {
+        return res.status(404).json({
+          success: false,
+          status: 'rejected',
+          reason: 'group_not_found',
+          message: `Grupo Materia ${grupoMateriaId} no encontrado`
+        });
+      }
+
+      if (!grupo.estado) {
+        return res.status(400).json({
+          success: false,
+          status: 'rejected',
+          reason: 'group_inactive',
+          message: `Grupo ${grupo.grupo} está inactivo`
+        });
+      }
+
+      if (grupo.cupo <= 0) {
+        return res.status(409).json({
+          success: false,
+          status: 'rejected',
+          reason: 'no_seats_available',
+          message: `Sin cupos disponibles en grupo ${grupo.grupo}`,
+          //cuposRestantes: 0
+        });
+      }
+
+      const existingInscription = await Inscripcion.findOne({
+        where: {
+          estudianteId,
+          grupoMateriaId
+        }
+      });
+
+
+
+
+
+      if (existingInscription) {
+        return res.status(409).json({
+          success: false,
+          status: 'rejected',
+          reason: 'already_enrolled',
+          message: `Estudiante ${estudianteId} ya está inscrito en este grupo`
+        });
+      }
+
+      const service = getQueueService();
+      
+      const result = await service.enqueueTaskAutoBalance({
+        type: 'inscription',
+        model: 'Inscripcion',
+        operation: 'requestSeat',
+        data: {
+          estudianteId,
+          grupoMateriaId,
+          gestion: gestion || new Date().getFullYear()
+        }
+      });
+
+      console.log(`✅ Solicitud encolada en: ${result.queueName} (cupos disponibles: ${grupo.cupo})`);
+
+      res.status(202).json({
+        ...result,
+        message: 'Seat request queued successfully',
+        status: 'pending'
+        //cuposDisponibles: grupo.cupo
+      });
+    } catch (error) {
+      console.error("Error in requestSeat:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error requesting seat",
+        error: error.message,
+      });
+    }
+  },
+
   // Obtener todas las inscripciones
   getAll: async (req, res) => {
     try {

@@ -89,4 +89,6 @@ router.use('/notas', notaRoutes);
 router.use('/prerequisitos', prerequisitoRoutes);
 router.use('/planes-estudio', planEstudioRoutes);
 
+
+
 module.exports = router;

@@ -25,6 +25,10 @@ class TaskProcessor {
 
     const { model, operation, data, id } = task;
 
+ if (operation.toLowerCase() === 'requestseat') {
+      return await this.handleRequestSeat(data);
+    }
+
     // BÚSQUEDA DINÁMICA DEL MODELO
     const Model = this.findModel(model);
     if (!Model) {
@@ -280,6 +284,125 @@ class TaskProcessor {
 
     console.log(`✅ ${deleted} registros eliminados masivamente`);
     return result;
+  }
+
+
+    async handleRequestSeat(data) {
+    const { estudianteId, grupoMateriaId, gestion } = data;
+    
+    console.log(`🎓 Procesando solicitud de inscripción:`);
+    console.log(`   Estudiante: ${estudianteId}`);
+    console.log(`   Grupo Materia: ${grupoMateriaId}`);
+
+    const GrupoMateria = this.models.GrupoMateria;
+    const Inscripcion = this.models.Inscripcion;
+
+    if (!GrupoMateria || !Inscripcion) {
+      throw new Error('Modelos GrupoMateria o Inscripcion no encontrados');
+    }
+
+    // Iniciar transacción para garantizar atomicidad
+    const transaction = await sequelize.transaction();
+
+    try {
+      // 1. Obtener grupo con bloqueo (FOR UPDATE)
+      const grupo = await GrupoMateria.findByPk(grupoMateriaId, {
+        lock: transaction.LOCK.UPDATE,
+        transaction
+      });
+
+      if (!grupo) {
+        throw new Error(`Grupo Materia ${grupoMateriaId} no encontrado`);
+      }
+
+      if (!grupo.estado) {
+        throw new Error(`Grupo Materia ${grupoMateriaId} está inactivo`);
+      }
+
+      if (grupo.cupo <= 0) {
+        await transaction.rollback();
+        throw {
+          success: false,
+          status: 'rejected',
+          reason: 'no_seats_available',
+          message: `Sin cupos disponibles en grupo ${grupo.grupo}`,
+          grupoMateriaId,
+          estudianteId,
+          cuposRestantes: 0,
+          retry: false // ✅ NO reintentar
+        };
+      }
+
+      // 3. Verificar si ya está inscrito
+      const existingInscription = await Inscripcion.findOne({
+        where: {
+          estudianteId,
+          grupoMateriaId
+        },
+        transaction
+      });
+
+      if (existingInscription) {
+        await transaction.rollback();
+        return {
+          success: false,
+          status: 'rejected',
+          reason: 'already_enrolled',
+          message: `Estudiante ${estudianteId} ya inscrito en este grupo`,
+          grupoMateriaId,
+          estudianteId
+        };
+      }
+
+      // 4. Crear inscripción
+      const inscripcion = await Inscripcion.create({
+        estudianteId,
+        grupoMateriaId,
+        gestion,
+        fecha: new Date()
+      }, { transaction });
+
+      // 5. Decrementar cupo
+      await grupo.decrement('cupo', { 
+        by: 1, 
+        transaction 
+      });
+
+      await transaction.commit();
+
+      const cuposRestantes = grupo.cupo - 1;
+
+      console.log(`✅ Inscripción confirmada: ID ${inscripcion.id}`);
+      console.log(`   Cupos restantes: ${cuposRestantes}`);
+
+      return {
+        success: true,
+        status: 'confirmed',
+        inscripcionId: inscripcion.id,
+        estudianteId,
+        grupoMateriaId,
+        grupo: grupo.grupo,
+        cuposRestantes,
+        message: 'Seat confirmed successfully'
+      };
+
+     } catch (error) {
+      await transaction.rollback();
+      console.error(`❌ Error en inscripción:`, error.message);
+      
+      // ✅ Si es rechazo por cupos, NO es error técnico
+      if (error.reason === 'no_seats_available' || error.reason === 'already_enrolled') {
+        throw error; // Propagar tal cual
+      }
+      
+      throw {
+        success: false,
+        status: 'rejected',
+        reason: 'processing_error',
+        message: error.message,
+        retry: this.shouldRetry(error)
+      };
+    }
   }
 
   shouldRetry(error) {
