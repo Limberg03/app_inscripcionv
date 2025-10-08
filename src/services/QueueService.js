@@ -948,7 +948,7 @@ async getAllWorkers() {
     if (!operation) throw new Error('Operation is required');
     if (!data) throw new Error('Task data is required');
 
-    const validOperations = ['create', 'update', 'delete', 'bulkcreate', 'bulkupdate', 'bulkdelete', 'custom'];
+    const validOperations = ['create', 'update', 'delete', 'bulkcreate', 'bulkupdate', 'bulkdelete', 'custom', 'requestseat'];
     if (!validOperations.includes(operation.toLowerCase())) {
       throw new Error(`Invalid operation: ${operation}. Valid operations: ${validOperations.join(', ')}`);
     }
